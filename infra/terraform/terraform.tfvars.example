@@ -1,0 +1,4 @@
+budget_email                = "you@example.com"
+snowflake_organization_name = "ABCDEFG"   # SELECT CURRENT_ORGANIZATION_NAME();
+snowflake_account_name      = "XY12345"   # SELECT CURRENT_ACCOUNT_NAME();
+snowflake_private_key_path  = "~/.snowflake/terraform_svc_key.p8"
