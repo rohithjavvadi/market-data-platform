@@ -4,9 +4,6 @@ locals {
   account_id = data.aws_caller_identity.me.account_id
   lake       = toset(["bronze", "silver"])
 
-  # Pre-computed so the storage integration and the IAM role don't form a cycle
-  snowflake_role_name = "${var.project}-snowflake-s3-read"
-  snowflake_role_arn  = "arn:aws:iam::${local.account_id}:role/${local.snowflake_role_name}"
 }
 
 # ---------- S3 data lake ----------
@@ -48,27 +45,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "bronze" {
   }
 }
 
-# ---------- IAM role Snowflake assumes to read the lake ----------
-data "aws_iam_policy_document" "snowflake_trust" {
-  statement {
-    actions = ["sts:AssumeRole"]
-    principals {
-      type        = "AWS"
-      identifiers = [snowflake_storage_integration.s3.storage_aws_iam_user_arn]
-    }
-    condition {
-      test     = "StringEquals"
-      variable = "sts:ExternalId"
-      values   = [snowflake_storage_integration.s3.storage_aws_external_id]
-    }
-  }
-}
-
-resource "aws_iam_role" "snowflake" {
-  name               = local.snowflake_role_name
-  assume_role_policy = data.aws_iam_policy_document.snowflake_trust.json
-}
-
+# ---------- IAM user Snowflake uses to read the lake ----------
+# Plan B: free-plan guardrails block cross-account role assumption,
+# so Snowflake gets a read-only key scoped to the two lake buckets.
 data "aws_iam_policy_document" "snowflake_s3_read" {
   statement {
     actions   = ["s3:GetObject", "s3:GetObjectVersion"]
@@ -80,10 +59,18 @@ data "aws_iam_policy_document" "snowflake_s3_read" {
   }
 }
 
-resource "aws_iam_role_policy" "snowflake_s3_read" {
+resource "aws_iam_user" "snowflake" {
+  name = "${var.project}-snowflake-reader"
+}
+
+resource "aws_iam_user_policy" "snowflake_s3_read" {
   name   = "s3-lake-read"
-  role   = aws_iam_role.snowflake.id
+  user   = aws_iam_user.snowflake.name
   policy = data.aws_iam_policy_document.snowflake_s3_read.json
+}
+
+resource "aws_iam_access_key" "snowflake" {
+  user = aws_iam_user.snowflake.name
 }
 
 # ---------- Cost guardrail ----------

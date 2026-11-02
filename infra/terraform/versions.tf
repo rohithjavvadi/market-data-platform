@@ -46,6 +46,4 @@ provider "snowflake" {
   role              = "ACCOUNTADMIN"
   authenticator     = "SNOWFLAKE_JWT"
   private_key       = file(pathexpand(var.snowflake_private_key_path))
-
-  preview_features_enabled = ["snowflake_storage_integration_resource"]
 }

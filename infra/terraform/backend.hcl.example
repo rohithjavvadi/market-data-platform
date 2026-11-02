@@ -1,2 +1,2 @@
 bucket = "mdp-tf-state-<AWS_ACCOUNT_ID>"   # output of bootstrap/
-region = "us-east-1"
+region = "us-east-2"

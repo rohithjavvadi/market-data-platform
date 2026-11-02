@@ -3,7 +3,6 @@ resource "snowflake_resource_monitor" "mdp" {
   provider                  = snowflake.admin
   name                      = "MDP_MONITOR"
   credit_quota              = var.snowflake_monthly_credit_quota
-  frequency                 = "MONTHLY"
   notify_triggers           = [75]
   suspend_trigger           = 100
   suspend_immediate_trigger = 110
@@ -32,17 +31,6 @@ resource "snowflake_database" "analytics" {
   name = "ANALYTICS" # dbt creates STAGING / INTERMEDIATE / MARTS / ci_pr_<n>
 }
 
-# ---------- Storage integration (S3 -> Snowflake) ----------
-resource "snowflake_storage_integration" "s3" {
-  provider                  = snowflake.admin
-  name                      = "MDP_S3_INT"
-  type                      = "EXTERNAL_STAGE"
-  enabled                   = true
-  storage_provider          = "S3"
-  storage_aws_role_arn      = local.snowflake_role_arn
-  storage_allowed_locations = [for b in ["bronze", "silver"] : "s3://${var.project}-${b}-${local.account_id}/"]
-}
-
 # ---------- Roles ----------
 resource "snowflake_account_role" "role" {
   provider = snowflake.admin
@@ -69,7 +57,7 @@ resource "snowflake_grant_privileges_to_account_role" "wh_usage" {
   }
 }
 
-# LOADER: write RAW.MARKET, use the integration
+# LOADER: write RAW.MARKET
 resource "snowflake_grant_privileges_to_account_role" "loader_raw_db" {
   provider          = snowflake.admin
   account_role_name = snowflake_account_role.role["LOADER"].name
@@ -86,16 +74,6 @@ resource "snowflake_grant_privileges_to_account_role" "loader_raw_schema" {
   privileges        = ["USAGE", "CREATE TABLE", "CREATE STAGE", "CREATE FILE FORMAT", "CREATE PIPE"]
   on_schema {
     schema_name = snowflake_schema.raw_market.fully_qualified_name
-  }
-}
-
-resource "snowflake_grant_privileges_to_account_role" "loader_integration" {
-  provider          = snowflake.admin
-  account_role_name = snowflake_account_role.role["LOADER"].name
-  privileges        = ["USAGE"]
-  on_account_object {
-    object_type = "INTEGRATION"
-    object_name = snowflake_storage_integration.s3.name
   }
 }
 
