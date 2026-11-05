@@ -12,7 +12,7 @@ conn = snowflake.connector.connect(
 sql = """
 COPY INTO RAW.MARKET.TRADES (RECORD, FILE_NAME, FILE_ROW_NUMBER)
 FROM (SELECT $1, METADATA$FILENAME, METADATA$FILE_ROW_NUMBER FROM @RAW.MARKET.BRONZE_TRADES)
-PATTERN = '.*[.]json[.]gz'
+PATTERN = '.*[.]parquet'
 """
 try:
     rows = conn.cursor().execute(sql).fetchall()

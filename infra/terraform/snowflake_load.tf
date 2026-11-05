@@ -3,7 +3,7 @@ resource "snowflake_stage_external_s3" "bronze_trades" {
   database = snowflake_database.raw.name
   schema   = snowflake_schema.raw_market.name
   url      = "s3://mdp-bronze-388260576625/trades/"
-  comment  = "Bronze trades NDJSON.gz written by consumer/bronze_writer.py"
+  comment  = "Bronze trades Parquet written by consumer/bronze_writer.py"
 
   credentials {
     aws_key_id     = aws_iam_access_key.snowflake.id
@@ -11,8 +11,8 @@ resource "snowflake_stage_external_s3" "bronze_trades" {
   }
 
   file_format {
-    json {
-      compression = "GZIP"
+    parquet {
+      compression = "AUTO"
     }
   }
 }

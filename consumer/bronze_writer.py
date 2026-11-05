@@ -1,5 +1,5 @@
 import argparse
-import gzip
+import io
 import json
 import signal
 import time
@@ -7,7 +7,25 @@ from collections import defaultdict
 from datetime import datetime, timezone
 
 import boto3
+import pyarrow as pa
+import pyarrow.parquet as pq
 from confluent_kafka import Consumer, TopicPartition
+
+SCHEMA = pa.schema([
+    ("trade_id", pa.string()),
+    ("symbol", pa.string()),
+    ("price", pa.float64()),
+    ("qty", pa.float64()),
+    ("conditions", pa.list_(pa.string())),
+    ("side", pa.string()),
+    ("exchange", pa.string()),
+    ("ts", pa.string()),
+    ("ingested_at", pa.string()),
+    ("_kafka_partition", pa.int32()),
+    ("_kafka_offset", pa.int64()),
+    ("_kafka_ts", pa.int64()),
+    ("_raw", pa.string()),
+])
 
 
 def parse_ts(rec, fallback_ms):
@@ -15,6 +33,13 @@ def parse_ts(rec, fallback_ms):
         return datetime.fromisoformat(rec["ts"]).astimezone(timezone.utc)
     except Exception:
         return datetime.fromtimestamp(fallback_ms / 1000, timezone.utc)
+
+
+def to_parquet(recs):
+    table = pa.Table.from_pylist(recs, schema=SCHEMA)
+    out = io.BytesIO()
+    pq.write_table(table, out, compression="snappy")
+    return out.getvalue()
 
 
 def main():
@@ -40,7 +65,7 @@ def main():
     consumer.subscribe([args.topic])
 
     buf = defaultdict(list)
-    state = {"count": 0, "last_flush": time.time(), "last_msg": time.time(), "files": 0, "records": 0}
+    state = {"count": 0, "last_flush": time.time(), "last_msg": time.time(), "files": 0, "records": 0, "bytes": 0}
     running = True
 
     def stop(*_):
@@ -60,12 +85,13 @@ def main():
             for _, rec, dt in items:
                 groups[(dt.strftime("%Y-%m-%d"), dt.strftime("%H"))].append(rec)
             for (d, h), recs in groups.items():
-                body = gzip.compress(("\n".join(json.dumps(r) for r in recs) + "\n").encode())
-                key = f"{args.prefix}/dt={d}/hour={h}/p{p}-{first:012d}-{last:012d}.json.gz"
-                s3.put_object(Bucket=args.bucket, Key=key, Body=body, ContentType="application/gzip")
+                body = to_parquet(recs)
+                key = f"{args.prefix}/dt={d}/hour={h}/p{p}-{first:012d}-{last:012d}.parquet"
+                s3.put_object(Bucket=args.bucket, Key=key, Body=body, ContentType="application/vnd.apache.parquet")
                 state["files"] += 1
                 state["records"] += len(recs)
-                print(f"wrote s3://{args.bucket}/{key} ({len(recs)} records)")
+                state["bytes"] += len(body)
+                print(f"wrote s3://{args.bucket}/{key} ({len(recs)} records, {len(body)} bytes)")
             commits.append(TopicPartition(args.topic, p, last + 1))
         if commits:
             consumer.commit(offsets=commits, asynchronous=False)
@@ -99,7 +125,7 @@ def main():
     finally:
         flush()
         consumer.close()
-        print(f"done: files={state['files']} records={state['records']}")
+        print(f"done: files={state['files']} records={state['records']} bytes={state['bytes']}")
 
 
 if __name__ == "__main__":
