@@ -1,0 +1,13 @@
+name: mdp
+version: "1.0.0"
+profile: mdp
+model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  mdp:
+    staging:
+      +schema: staging
+      +materialized: view

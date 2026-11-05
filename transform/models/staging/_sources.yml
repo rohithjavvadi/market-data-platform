@@ -1,0 +1,9 @@
+version: 2
+
+sources:
+  - name: raw_market
+    database: RAW
+    schema: MARKET
+    tables:
+      - name: trades
+        description: One row per Kafka message, loaded from S3 bronze by COPY INTO.
