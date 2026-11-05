@@ -1,0 +1,17 @@
+version: 2
+
+models:
+  - name: fct_ohlcv_1m
+    description: One-minute OHLCV bars per symbol, built from deduplicated trades.
+    columns:
+      - name: bar_key
+        description: symbol|minute; unique per bar.
+        data_tests:
+          - unique
+          - not_null
+      - name: bar_ts_utc
+        data_tests:
+          - not_null
+      - name: trade_count
+        data_tests:
+          - not_null
