@@ -1,0 +1,33 @@
+x-app: &app
+  depends_on:
+    - redpanda-0
+  networks:
+    - redpanda_network
+  restart: unless-stopped
+  stop_signal: SIGINT
+  stop_grace_period: 90s
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  finnhub-producer:
+    <<: *app
+    build:
+      context: ..
+      dockerfile: producer/Dockerfile
+    container_name: finnhub-producer
+    env_file: ../.env
+
+  bronze-writer:
+    <<: *app
+    build:
+      context: ..
+      dockerfile: consumer/Dockerfile
+    container_name: bronze-writer
+    environment:
+      AWS_PROFILE: default
+    volumes:
+      - ~/.aws:/root/.aws:ro
