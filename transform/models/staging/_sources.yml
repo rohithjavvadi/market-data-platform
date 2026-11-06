@@ -7,3 +7,7 @@ sources:
     tables:
       - name: trades
         description: One row per Kafka message, loaded from S3 bronze by COPY INTO.
+      - name: daily_bars
+        description: Tiingo EOD bars (raw + adjusted), one row per ticker-day per bronze file.
+      - name: edgar_filings
+        description: Raw SEC EDGAR JSON, one row per file; endpoint, ticker and dt are in FILE_NAME.

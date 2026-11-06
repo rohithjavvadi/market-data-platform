@@ -23,3 +23,49 @@ models:
           - accepted_values:
               arguments:
                 values: ["SIM", "FINNHUB"]
+
+  - name: stg_daily_bars
+    description: Typed Tiingo daily bars; one row per ticker per trading day (latest load wins).
+    columns:
+      - name: daily_bar_key
+        description: ticker|date.
+        data_tests:
+          - unique
+          - not_null
+      - name: ticker
+        data_tests:
+          - not_null
+      - name: bar_date
+        data_tests:
+          - not_null
+      - name: close
+        data_tests:
+          - not_null
+
+  - name: stg_edgar_companies
+    description: Company profile from the latest SEC submissions file per ticker.
+    columns:
+      - name: ticker
+        data_tests:
+          - unique
+          - not_null
+      - name: cik
+        data_tests:
+          - unique
+          - not_null
+      - name: company_name
+        data_tests:
+          - not_null
+
+  - name: stg_edgar_facts
+    description: XBRL companyfacts flattened to one row per reported value, from each CIK's latest file.
+    columns:
+      - name: cik
+        data_tests:
+          - not_null
+      - name: concept
+        data_tests:
+          - not_null
+      - name: period_end
+        data_tests:
+          - not_null
