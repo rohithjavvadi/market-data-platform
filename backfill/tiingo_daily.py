@@ -55,6 +55,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--tickers", default="AAPL,MSFT,NVDA,AMZN,GOOGL")
     ap.add_argument("--years", type=int, default=5)
+    ap.add_argument("--days", type=int, default=0, help="if >0, fetch only the last N calendar days")
     ap.add_argument("--bucket", default="mdp-bronze-388260576625")
     ap.add_argument("--prefix", default="daily_bars/source=tiingo")
     ap.add_argument("--region", default="us-east-2")
@@ -65,7 +66,7 @@ def main():
         raise SystemExit("Set TIINGO_API_KEY in .env")
 
     end = date.today()
-    start = end - timedelta(days=365 * args.years + 2)
+    start = end - timedelta(days=args.days) if args.days else end - timedelta(days=365 * args.years + 2)
     session = requests.Session()
     session.headers.update({"Authorization": f"Token {key}", "Content-Type": "application/json"})
     s3 = boto3.client("s3", region_name=args.region)
