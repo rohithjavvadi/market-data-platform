@@ -43,5 +43,11 @@ with DAG(
         bash_command=f"{SPARK_ENV} && {PY} spark/silver_to_bars_1m.py --end {UTC_END} --days 2",
     )
 
+    parity = BashOperator(
+        task_id="bars_parity_check",
+        bash_command=f"{SPARK_ENV} && {PY} spark/check_bars_parity.py --date {UTC_END}",
+    )
+
     copy_raw >> dbt_build
     spark_silver >> spark_bars
+    [dbt_build, spark_bars] >> parity

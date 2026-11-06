@@ -9,7 +9,7 @@ from bronze_to_silver_trades import build_spark
 
 BARS = "s3a://mdp-silver-388260576625/bars_1m"
 COLS = ["open", "high", "low", "close", "volume", "vwap", "trade_count"]
-TIE_COLS = {"open", "close"}
+TIE_COLS = set()
 FMT = "%Y-%m-%d %H:%M"
 
 
