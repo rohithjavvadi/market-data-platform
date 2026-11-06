@@ -4,6 +4,12 @@ models:
   - name: fct_ohlcv_1m
     description: One-minute OHLCV bars per symbol, built from deduplicated trades.
     columns:
+      - name: symbol
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_security')
+                field: ticker
       - name: bar_key
         description: symbol|minute; unique per bar.
         data_tests:
@@ -31,6 +37,11 @@ models:
   - name: dim_security
     description: SCD2 security dimension from SEC submissions (dbt snapshot on stg_edgar_companies).
     columns:
+      - name: asset_class
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["equity", "crypto"]
       - name: security_sk
         data_tests:
           - unique

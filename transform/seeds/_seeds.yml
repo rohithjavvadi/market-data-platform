@@ -1,0 +1,16 @@
+version: 2
+
+seeds:
+  - name: non_sec_securities
+    description: Instruments with no SEC filer (crypto etc.), so every traded symbol has a dim_security row.
+    config:
+      column_types:
+        ticker: varchar
+        company_name: varchar
+        asset_class: varchar
+        primary_exchange: varchar
+    columns:
+      - name: ticker
+        data_tests:
+          - unique
+          - not_null
