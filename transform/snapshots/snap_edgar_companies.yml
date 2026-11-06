@@ -1,0 +1,17 @@
+snapshots:
+  - name: snap_edgar_companies
+    relation: ref('stg_edgar_companies')
+    config:
+      schema: snapshots
+      unique_key: ticker
+      strategy: check
+      check_cols:
+        - cik
+        - company_name
+        - entity_type
+        - filer_category
+        - sic_code
+        - sic_description
+        - primary_exchange
+        - fiscal_year_end_mmdd
+        - state_of_incorporation
