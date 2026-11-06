@@ -34,6 +34,10 @@ with DAG(
         task_id="dbt_build",
         bash_command=f"cd {REPO}/transform && {DBT} build",
     )
+    freshness = BashOperator(
+        task_id="dbt_source_freshness",
+        bash_command=f"cd {REPO}/transform && {DBT} source freshness",
+    )
     spark_silver = BashOperator(
         task_id="spark_bronze_to_silver",
         bash_command=f"{SPARK_ENV} && {PY} spark/bronze_to_silver_trades.py --end {UTC_END} --days 2",
@@ -48,6 +52,6 @@ with DAG(
         bash_command=f"{SPARK_ENV} && {PY} spark/check_bars_parity.py --date {UTC_END}",
     )
 
-    copy_raw >> dbt_build
+    copy_raw >> [dbt_build, freshness]
     spark_silver >> spark_bars
     [dbt_build, spark_bars] >> parity

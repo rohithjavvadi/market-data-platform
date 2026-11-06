@@ -4,10 +4,24 @@ sources:
   - name: raw_market
     database: RAW
     schema: MARKET
+    config:
+      loaded_at_field: loaded_at
     tables:
       - name: trades
         description: One row per Kafka message, loaded from S3 bronze by COPY INTO.
+        config:
+          freshness:
+            warn_after: {count: 30, period: minute}
+            error_after: {count: 2, period: hour}
       - name: daily_bars
         description: Tiingo EOD bars (raw + adjusted), one row per ticker-day per bronze file.
+        config:
+          freshness:
+            warn_after: {count: 3, period: day}
+            error_after: {count: 5, period: day}
       - name: edgar_filings
         description: Raw SEC EDGAR JSON, one row per file; endpoint, ticker and dt are in FILE_NAME.
+        config:
+          freshness:
+            warn_after: {count: 3, period: day}
+            error_after: {count: 8, period: day}
