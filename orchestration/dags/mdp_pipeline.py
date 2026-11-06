@@ -7,6 +7,11 @@ from airflow.sdk import DAG
 REPO = os.path.expanduser("~/market-data-platform")
 PY = os.environ.get("MDP_PY", "/opt/anaconda3/bin/python")
 DBT = os.environ.get("MDP_DBT", "/opt/anaconda3/bin/dbt")
+JAVA_HOME = os.environ.get(
+    "JAVA_HOME", "/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home"
+)
+SPARK_ENV = f"export JAVA_HOME={JAVA_HOME} && cd {REPO}"
+UTC_END = "$(date -u +%F)"
 
 with DAG(
     dag_id="mdp_pipeline",
@@ -14,17 +19,13 @@ with DAG(
     schedule="*/15 * * * *",
     catchup=False,
     max_active_runs=1,
-    default_args={"retries": 1, "retry_delay": pendulum.duration(minutes=1)},
+    default_args={
+        "retries": 1,
+        "retry_delay": pendulum.duration(minutes=1),
+        "execution_timeout": pendulum.duration(minutes=12),
+    },
     tags=["mdp"],
 ) as dag:
-    produce = BashOperator(
-        task_id="produce_finnhub",
-        bash_command=f"cd {REPO} && {PY} producer/finnhub_producer.py --seconds 120",
-    )
-    land_bronze = BashOperator(
-        task_id="land_bronze",
-        bash_command=f"cd {REPO} && {PY} consumer/bronze_writer.py --idle-exit 15",
-    )
     copy_raw = BashOperator(
         task_id="copy_into_raw",
         bash_command=f"cd {REPO} && {PY} sql/run_copy.py",
@@ -33,5 +34,14 @@ with DAG(
         task_id="dbt_build",
         bash_command=f"cd {REPO}/transform && {DBT} build",
     )
+    spark_silver = BashOperator(
+        task_id="spark_bronze_to_silver",
+        bash_command=f"{SPARK_ENV} && {PY} spark/bronze_to_silver_trades.py --end {UTC_END} --days 2",
+    )
+    spark_bars = BashOperator(
+        task_id="spark_silver_to_bars_1m",
+        bash_command=f"{SPARK_ENV} && {PY} spark/silver_to_bars_1m.py --end {UTC_END} --days 2",
+    )
 
-    produce >> land_bronze >> copy_raw >> dbt_build
+    copy_raw >> dbt_build
+    spark_silver >> spark_bars
