@@ -13,7 +13,11 @@ with sec as (
         primary_exchange,
         fiscal_year_end_mmdd,
         state_of_incorporation,
-        dbt_valid_from              as valid_from,
+        case
+            when row_number() over (partition by ticker order by dbt_valid_from) = 1
+                then '1900-01-01'::timestamp_ntz
+            else dbt_valid_from
+        end                         as valid_from,
         dbt_valid_to                as valid_to
     from {{ ref('snap_edgar_companies') }}
 ),
