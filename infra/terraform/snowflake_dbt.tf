@@ -4,7 +4,7 @@ resource "snowflake_service_user" "dbt" {
   comment           = "dbt transformations"
   default_role      = snowflake_account_role.role["TRANSFORMER"].name
   default_warehouse = snowflake_warehouse.mdp.name
-  rsa_public_key    = replace(replace(file(pathexpand("~/.snowflake/dbt_svc_key.pub")), "/-----[A-Z ]+-----/", ""), "\n", "")
+  rsa_public_key    = replace(replace(file("${path.module}/keys/dbt_svc_key.pub"), "/-----[A-Z ]+-----/", ""), "\n", "")
 }
 
 resource "snowflake_grant_account_role" "transformer_to_dbt" {
@@ -19,7 +19,7 @@ resource "snowflake_service_user" "loader" {
   comment           = "COPY INTO loads from bronze"
   default_role      = snowflake_account_role.role["LOADER"].name
   default_warehouse = snowflake_warehouse.mdp.name
-  rsa_public_key    = replace(replace(file(pathexpand("~/.snowflake/loader_svc_key.pub")), "/-----[A-Z ]+-----/", ""), "\n", "")
+  rsa_public_key    = replace(replace(file("${path.module}/keys/loader_svc_key.pub"), "/-----[A-Z ]+-----/", ""), "\n", "")
 }
 
 resource "snowflake_grant_account_role" "loader_to_svc" {
