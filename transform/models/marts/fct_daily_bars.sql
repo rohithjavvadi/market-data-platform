@@ -11,7 +11,7 @@ with src as (
 with_returns as (
     select
         *,
-        adj_close / nullif(lag(adj_close) over (partition by ticker order by bar_date), 0) - 1 as daily_return
+        (adj_close / nullif(lag(adj_close) over (partition by ticker order by bar_date), 0) - 1) * 100 as daily_return
     from src
 )
 
