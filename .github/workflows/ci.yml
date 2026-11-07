@@ -74,9 +74,23 @@ jobs:
           git worktree add /tmp/base origin/${{ github.base_ref }}
           cd /tmp/base/transform
           dbt deps
-          dbt parse --target dev
-      - name: dbt build (modified + downstream, deferred to DEV)
+          dbt parse --target prod
+      - name: dbt build (modified + downstream, deferred to PROD)
         working-directory: transform
         run: |
           dbt deps
           dbt build --target ci --select state:modified+ --exclude resource_type:snapshot --defer --state /tmp/base/transform/target
+
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.17.1"
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate

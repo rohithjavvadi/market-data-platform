@@ -23,3 +23,14 @@ mdp:
       database: ANALYTICS
       schema: DEV
       threads: 4
+    prod:
+      type: snowflake
+      account: VZKISNL-UC48480
+      user: DBT_SVC
+      role: TRANSFORMER
+      authenticator: snowflake_jwt
+      private_key_path: "{{ env_var('SNOWFLAKE_PRIVATE_KEY_PATH') }}"
+      warehouse: MDP_WH
+      database: ANALYTICS
+      schema: PROD
+      threads: 4
