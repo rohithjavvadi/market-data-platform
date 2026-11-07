@@ -4,6 +4,8 @@ import pendulum
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.sdk import DAG
 
+from mdp_common import default_args
+
 REPO = os.path.expanduser("~/market-data-platform")
 PY = os.environ.get("MDP_PY", "/opt/anaconda3/bin/python")
 
@@ -14,11 +16,8 @@ with DAG(
     schedule="15 1 * * 2-6",
     catchup=False,
     max_active_runs=1,
-    default_args={
-        "retries": 2,
-        "retry_delay": pendulum.duration(minutes=10),
-        "execution_timeout": pendulum.duration(minutes=20),
-    },
+    dagrun_timeout=pendulum.duration(minutes=90),
+    default_args=default_args(retries=2, delay_min=10, max_delay_min=30, timeout_min=20),
     tags=["mdp"],
 ) as dag:
     tiingo = BashOperator(
