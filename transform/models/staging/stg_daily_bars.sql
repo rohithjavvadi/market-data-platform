@@ -31,8 +31,9 @@ select
     ticker || '|' || to_varchar(bar_date, 'YYYY-MM-DD') as daily_bar_key,
     *
 from typed
-qualify row_number() over (
-    partition by ticker, bar_date
-    order by ingested_at_utc desc, loaded_at desc, file_name desc
-) = 1
+qualify
+    row_number() over (
+        partition by ticker, bar_date
+        order by ingested_at_utc desc, loaded_at desc, file_name desc
+    ) = 1
 -- ci smoke test
