@@ -23,3 +23,7 @@ venv/
 target/
 dbt_packages/
 logs/
+
+*.tfplan
+tf.plan
+*.plan
