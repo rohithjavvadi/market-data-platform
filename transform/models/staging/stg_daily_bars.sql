@@ -35,3 +35,4 @@ qualify row_number() over (
     partition by ticker, bar_date
     order by ingested_at_utc desc, loaded_at desc, file_name desc
 ) = 1
+-- ci smoke test
