@@ -3,6 +3,10 @@ version: 2
 models:
   - name: stg_trades
     description: Typed trades, deduplicated on Kafka partition and offset (bronze is at-least-once).
+    data_tests:
+      - dbt_expectations.expect_table_row_count_to_be_between:
+          arguments:
+            min_value: 1
     columns:
       - name: trade_key
         description: Kafka partition-offset; unique per message.
@@ -15,9 +19,22 @@ models:
       - name: price
         data_tests:
           - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                strictly: true
+      - name: qty
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
       - name: trade_ts_utc
         data_tests:
           - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: "'2020-01-01'::timestamp_ntz"
+                max_value: "dateadd('minute', 10, sysdate())"
       - name: exchange
         data_tests:
           - accepted_values:
@@ -26,6 +43,22 @@ models:
 
   - name: stg_daily_bars
     description: Typed Tiingo daily bars; one row per ticker per trading day (latest load wins).
+    data_tests:
+      - dbt_expectations.expect_column_pair_values_A_to_be_greater_than_B:
+          arguments:
+            column_A: high
+            column_B: low
+            or_equal: true
+      - dbt_expectations.expect_column_pair_values_A_to_be_greater_than_B:
+          arguments:
+            column_A: high
+            column_B: close
+            or_equal: true
+      - dbt_expectations.expect_column_pair_values_A_to_be_greater_than_B:
+          arguments:
+            column_A: close
+            column_B: low
+            or_equal: true
     columns:
       - name: daily_bar_key
         description: ticker|date.
@@ -38,9 +71,22 @@ models:
       - name: bar_date
         data_tests:
           - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: "'2015-01-01'::date"
+                max_value: "current_date()"
       - name: close
         data_tests:
           - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                strictly: true
+      - name: volume
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
 
   - name: stg_edgar_companies
     description: Company profile from the latest SEC submissions file per ticker.

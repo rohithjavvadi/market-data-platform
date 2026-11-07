@@ -3,6 +3,32 @@ version: 2
 models:
   - name: fct_ohlcv_1m
     description: One-minute OHLCV bars per symbol, built from deduplicated trades.
+    data_tests:
+      - dbt_expectations.expect_column_pair_values_A_to_be_greater_than_B:
+          arguments:
+            column_A: high
+            column_B: low
+            or_equal: true
+      - dbt_expectations.expect_column_pair_values_A_to_be_greater_than_B:
+          arguments:
+            column_A: high
+            column_B: open
+            or_equal: true
+      - dbt_expectations.expect_column_pair_values_A_to_be_greater_than_B:
+          arguments:
+            column_A: high
+            column_B: close
+            or_equal: true
+      - dbt_expectations.expect_column_pair_values_A_to_be_greater_than_B:
+          arguments:
+            column_A: open
+            column_B: low
+            or_equal: true
+      - dbt_expectations.expect_column_pair_values_A_to_be_greater_than_B:
+          arguments:
+            column_A: close
+            column_B: low
+            or_equal: true
     columns:
       - name: symbol
         data_tests:
@@ -18,9 +44,29 @@ models:
       - name: bar_ts_utc
         data_tests:
           - not_null
+          - dbt_expectations.expect_row_values_to_have_recent_data:
+              arguments:
+                datepart: hour
+                interval: 3
+              config:
+                severity: warn
       - name: trade_count
         data_tests:
           - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+      - name: volume
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+      - name: vwap
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                strictly: true
 
   - name: dim_date
     description: Calendar 2021-2030; is_market_day from Tiingo trading days.
@@ -52,6 +98,12 @@ models:
 
   - name: fct_daily_bars
     description: Daily bars per ticker (incremental merge, 10-day lookback), with point-in-time security_sk and daily return.
+    data_tests:
+      - dbt_expectations.expect_column_pair_values_A_to_be_greater_than_B:
+          arguments:
+            column_A: high
+            column_B: low
+            or_equal: true
     columns:
       - name: daily_bar_key
         data_tests:
@@ -71,3 +123,24 @@ models:
               arguments:
                 to: ref('dim_security')
                 field: security_sk
+      - name: close
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                strictly: true
+      - name: daily_return
+        description: adj_close / prior adj_close - 1; null on a ticker's first row.
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: -0.5
+                max_value: 1.0
+      - name: bar_date
+        data_tests:
+          - dbt_expectations.expect_row_values_to_have_recent_data:
+              arguments:
+                datepart: day
+                interval: 5
+              config:
+                severity: warn

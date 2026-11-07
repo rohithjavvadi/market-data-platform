@@ -14,3 +14,6 @@ models:
     marts:
       +schema: marts
       +materialized: table
+
+vars:
+  "dbt_date:time_zone": "UTC"
