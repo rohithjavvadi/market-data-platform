@@ -2,7 +2,6 @@ import argparse
 import json
 import os
 import threading
-import time
 import uuid
 from datetime import datetime, timezone
 
@@ -51,13 +50,15 @@ def main():
     api_key = os.environ["MARKET_API_KEY"]
     symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
 
-    producer = Producer({
-        "bootstrap.servers": args.bootstrap,
-        "enable.idempotence": True,
-        "acks": "all",
-        "linger.ms": 20,
-        "compression.type": "lz4",
-    })
+    producer = Producer(
+        {
+            "bootstrap.servers": args.bootstrap,
+            "enable.idempotence": True,
+            "acks": "all",
+            "linger.ms": 20,
+            "compression.type": "lz4",
+        }
+    )
     stats = {"recv": 0, "ok": 0, "err": 0, "dlq": 0, "reconnects": 0}
     stop = threading.Event()
     state = {"ws": None, "backoff": 1}
@@ -131,7 +132,9 @@ def main():
         pass
     finally:
         producer.flush(10)
-        print(f"done: recv={stats['recv']} ok={stats['ok']} err={stats['err']} dlq={stats['dlq']} reconnects={stats['reconnects']}")
+        print(
+            f"done: recv={stats['recv']} ok={stats['ok']} err={stats['err']} dlq={stats['dlq']} reconnects={stats['reconnects']}"
+        )
 
 
 if __name__ == "__main__":

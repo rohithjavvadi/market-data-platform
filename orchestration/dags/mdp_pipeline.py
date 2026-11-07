@@ -3,15 +3,12 @@ import os
 import pendulum
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.sdk import DAG
-
 from mdp_common import RUN_DATE, deadline, default_args
 
 REPO = os.path.expanduser("~/market-data-platform")
 PY = os.environ.get("MDP_PY", "/opt/anaconda3/bin/python")
 DBT = os.environ.get("MDP_DBT", "/opt/anaconda3/bin/dbt")
-JAVA_HOME = os.environ.get(
-    "JAVA_HOME", "/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home"
-)
+JAVA_HOME = os.environ.get("JAVA_HOME", "/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home")
 SPARK_ENV = f"export JAVA_HOME={JAVA_HOME} SPARK_LOCAL_IP=127.0.0.1 && cd {REPO}"
 
 with DAG(

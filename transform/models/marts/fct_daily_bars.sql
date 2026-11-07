@@ -4,7 +4,7 @@ with src as (
     select *
     from {{ ref('stg_daily_bars') }}
     {% if is_incremental() %}
-    where bar_date >= (select dateadd(day, -20, max(bar_date)) from {{ this }})
+        where bar_date >= (select dateadd(day, -20, max(bar_date)) from {{ this }})
     {% endif %}
 ),
 
@@ -39,9 +39,10 @@ from with_returns b
 join {{ ref('dim_date') }} d
     on d.date_day = b.bar_date
 left join {{ ref('dim_security') }} s
-    on s.ticker = b.ticker
-   and b.bar_date >= s.valid_from::date
-   and (s.valid_to is null or b.bar_date < s.valid_to::date)
+    on
+        s.ticker = b.ticker
+        and b.bar_date >= s.valid_from::date
+        and (s.valid_to is null or b.bar_date < s.valid_to::date)
 {% if is_incremental() %}
-where b.bar_date >= (select dateadd(day, -10, max(bar_date)) from {{ this }})
+    where b.bar_date >= (select dateadd(day, -10, max(bar_date)) from {{ this }})
 {% endif %}

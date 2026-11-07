@@ -29,10 +29,8 @@ def spark():
     s.stop()
 
 
-def row(tid="t1", sym="AAPL", price=100.0, qty=1.0,
-        ts="2026-11-05T14:30:00.123Z", raw=None, part=0, off=1):
-    return (tid, sym, price, qty, ["1"], None, "FINNHUB", ts,
-            "2026-11-05T14:30:00.200Z", raw, part, off)
+def row(tid="t1", sym="AAPL", price=100.0, qty=1.0, ts="2026-11-05T14:30:00.123Z", raw=None, part=0, off=1):
+    return (tid, sym, price, qty, ["1"], None, "FINNHUB", ts, "2026-11-05T14:30:00.200Z", raw, part, off)
 
 
 def run(spark, rows):
@@ -54,24 +52,30 @@ def test_same_offset_different_partitions_kept(spark):
     assert len(out) == 2
 
 
-@pytest.mark.parametrize("bad", [
-    row(tid=None, off=10),
-    row(sym=None, off=11),
-    row(price=0.0, off=12),
-    row(qty=-1.0, off=13),
-    row(ts=None, off=14),
-    row(ts="not-a-time", off=15),
-    row(raw="{garbage", off=16),
-])
+@pytest.mark.parametrize(
+    "bad",
+    [
+        row(tid=None, off=10),
+        row(sym=None, off=11),
+        row(price=0.0, off=12),
+        row(qty=-1.0, off=13),
+        row(ts=None, off=14),
+        row(ts="not-a-time", off=15),
+        row(raw="{garbage", off=16),
+    ],
+)
 def test_drops_invalid_rows(spark, bad):
     assert run(spark, [bad]) == []
 
 
 def test_trade_date_is_utc_event_date(spark):
-    out = run(spark, [
-        row(ts="2026-11-05T23:59:59.999Z", off=1),
-        row(ts="2026-11-06T00:00:00.000Z", off=2),
-    ])
+    out = run(
+        spark,
+        [
+            row(ts="2026-11-05T23:59:59.999Z", off=1),
+            row(ts="2026-11-06T00:00:00.000Z", off=2),
+        ],
+    )
     dates = {r.kafka_offset: r.trade_date for r in out}
     assert dates == {1: date(2026, 11, 5), 2: date(2026, 11, 6)}
 
@@ -79,8 +83,17 @@ def test_trade_date_is_utc_event_date(spark):
 def test_output_columns(spark):
     out = transform(spark.createDataFrame([row()], SCHEMA))
     assert out.columns == [
-        "trade_id", "symbol", "price", "qty", "conditions", "side",
-        "exchange", "event_ts", "ingested_ts", "kafka_partition",
-        "kafka_offset", "trade_date",
+        "trade_id",
+        "symbol",
+        "price",
+        "qty",
+        "conditions",
+        "side",
+        "exchange",
+        "event_ts",
+        "ingested_ts",
+        "kafka_partition",
+        "kafka_offset",
+        "trade_date",
     ]
     assert dict(out.dtypes)["event_ts"] == "timestamp"

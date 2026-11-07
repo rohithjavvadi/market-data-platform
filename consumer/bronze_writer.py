@@ -11,21 +11,23 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from confluent_kafka import Consumer, TopicPartition
 
-SCHEMA = pa.schema([
-    ("trade_id", pa.string()),
-    ("symbol", pa.string()),
-    ("price", pa.float64()),
-    ("qty", pa.float64()),
-    ("conditions", pa.list_(pa.string())),
-    ("side", pa.string()),
-    ("exchange", pa.string()),
-    ("ts", pa.string()),
-    ("ingested_at", pa.string()),
-    ("_kafka_partition", pa.int32()),
-    ("_kafka_offset", pa.int64()),
-    ("_kafka_ts", pa.int64()),
-    ("_raw", pa.string()),
-])
+SCHEMA = pa.schema(
+    [
+        ("trade_id", pa.string()),
+        ("symbol", pa.string()),
+        ("price", pa.float64()),
+        ("qty", pa.float64()),
+        ("conditions", pa.list_(pa.string())),
+        ("side", pa.string()),
+        ("exchange", pa.string()),
+        ("ts", pa.string()),
+        ("ingested_at", pa.string()),
+        ("_kafka_partition", pa.int32()),
+        ("_kafka_offset", pa.int64()),
+        ("_kafka_ts", pa.int64()),
+        ("_raw", pa.string()),
+    ]
+)
 
 
 def parse_ts(rec, fallback_ms):
@@ -56,12 +58,14 @@ def main():
     args = ap.parse_args()
 
     s3 = boto3.client("s3", region_name=args.region)
-    consumer = Consumer({
-        "bootstrap.servers": args.bootstrap,
-        "group.id": args.group,
-        "enable.auto.commit": False,
-        "auto.offset.reset": "earliest",
-    })
+    consumer = Consumer(
+        {
+            "bootstrap.servers": args.bootstrap,
+            "group.id": args.group,
+            "enable.auto.commit": False,
+            "auto.offset.reset": "earliest",
+        }
+    )
     consumer.subscribe([args.topic])
 
     buf = defaultdict(list)

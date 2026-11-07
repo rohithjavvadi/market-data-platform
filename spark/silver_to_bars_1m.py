@@ -1,7 +1,9 @@
 import argparse
 from datetime import date, timedelta
-from pyspark.sql import DataFrame, functions as F
+
 from bronze_to_silver_trades import build_spark
+from pyspark.sql import DataFrame
+from pyspark.sql import functions as F
 
 TRADES = "s3a://mdp-silver-388260576625/trades"
 BARS = "s3a://mdp-silver-388260576625/bars_1m"
@@ -35,9 +37,7 @@ def main():
 
     spark = build_spark()
     spark.sparkContext.setLogLevel("WARN")
-    trades = spark.read.parquet(TRADES).where(
-        F.col("trade_date").between(F.lit(start), F.lit(end))
-    )
+    trades = spark.read.parquet(TRADES).where(F.col("trade_date").between(F.lit(start), F.lit(end)))
     bars = to_bars(trades).cache()
     bars.repartition("trade_date").write.mode("overwrite").partitionBy("trade_date").parquet(BARS)
     print("dates", start, "->", end, "bars", bars.count())

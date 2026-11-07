@@ -4,8 +4,8 @@ import sys
 from datetime import date, datetime, timedelta, timezone
 
 import snowflake.connector
-from pyspark.sql import functions as F
 from bronze_to_silver_trades import build_spark
+from pyspark.sql import functions as F
 
 BARS = "s3a://mdp-silver-388260576625/bars_1m"
 COLS = ["open", "high", "low", "close", "volume", "vwap", "trade_count"]
@@ -34,10 +34,7 @@ def snowflake_bars(day, cutoff):
             """,
             (f"{day} 00:00", cutoff),
         )
-        return [
-            (r[0], *(float(v) if v is not None else None for v in r[1:7]), int(r[7]))
-            for r in cur.fetchall()
-        ]
+        return [(r[0], *(float(v) if v is not None else None for v in r[1:7]), int(r[7])) for r in cur.fetchall()]
     finally:
         conn.close()
 
@@ -93,7 +90,9 @@ def main():
             hard += n
     if hard or only_spark or only_wh:
         bad = both.where(F.greatest(*[differs(c).cast("int") for c in COLS if c not in TIE_COLS]) == 1)
-        bad.select("bar_key", *[F.col(f"{x}.{c}").alias(f"{x}_{c}") for c in ["volume", "trade_count"] for x in "sw"]).show(5, False)
+        bad.select(
+            "bar_key", *[F.col(f"{x}.{c}").alias(f"{x}_{c}") for c in ["volume", "trade_count"] for x in "sw"]
+        ).show(5, False)
         j.where(F.col("w.trade_count").isNull() | F.col("s.trade_count").isNull()).select("bar_key").show(5, False)
     spark.stop()
     status = "PASS" if not (hard or only_spark or only_wh) else "FAIL"

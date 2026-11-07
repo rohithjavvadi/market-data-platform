@@ -3,7 +3,6 @@ import os
 import pendulum
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.sdk import DAG
-
 from mdp_common import deadline, default_args
 
 REPO = os.path.expanduser("~/market-data-platform")

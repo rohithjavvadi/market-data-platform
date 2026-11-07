@@ -1,6 +1,8 @@
 import argparse
 from datetime import date, timedelta
-from pyspark.sql import SparkSession, DataFrame, functions as F
+
+from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql import functions as F
 
 BRONZE = "s3a://mdp-bronze-388260576625/trades"
 SILVER = "s3a://mdp-silver-388260576625/trades"
@@ -12,8 +14,10 @@ def build_spark() -> SparkSession:
         .appName("mdp-bronze-to-silver-trades")
         .config("spark.driver.memory", "4g")
         .config("spark.jars.packages", "org.apache.hadoop:hadoop-aws:3.5.0")
-        .config("spark.hadoop.fs.s3a.aws.credentials.provider",
-                "software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider")
+        .config(
+            "spark.hadoop.fs.s3a.aws.credentials.provider",
+            "software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider",
+        )
         .config("spark.hadoop.fs.s3a.endpoint.region", "us-east-2")
         .config("spark.sql.session.timeZone", "UTC")
         .config("spark.sql.sources.partitionOverwriteMode", "dynamic")
@@ -44,10 +48,7 @@ def transform(df: DataFrame) -> DataFrame:
         & (F.col("price") > 0)
         & (F.col("qty") > 0)
     )
-    return (
-        clean.dropDuplicates(["kafka_partition", "kafka_offset"])
-        .withColumn("trade_date", F.to_date("event_ts"))
-    )
+    return clean.dropDuplicates(["kafka_partition", "kafka_offset"]).withColumn("trade_date", F.to_date("event_ts"))
 
 
 def main():
@@ -61,7 +62,8 @@ def main():
     spark = build_spark()
     spark.sparkContext.setLogLevel("WARN")
     bronze = (
-        spark.read.option("pathGlobFilter", "*.parquet").parquet(BRONZE)
+        spark.read.option("pathGlobFilter", "*.parquet")
+        .parquet(BRONZE)
         .where(F.col("dt").between(F.lit(start), F.lit(end)))
         .drop("dt", "hour")
     )

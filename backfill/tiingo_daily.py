@@ -14,30 +14,34 @@ load_dotenv()
 
 URL = "https://api.tiingo.com/tiingo/daily/{ticker}/prices"
 
-SCHEMA = pa.schema([
-    ("ticker", pa.string()),
-    ("date", pa.string()),
-    ("open", pa.float64()),
-    ("high", pa.float64()),
-    ("low", pa.float64()),
-    ("close", pa.float64()),
-    ("volume", pa.float64()),
-    ("adjOpen", pa.float64()),
-    ("adjHigh", pa.float64()),
-    ("adjLow", pa.float64()),
-    ("adjClose", pa.float64()),
-    ("adjVolume", pa.float64()),
-    ("divCash", pa.float64()),
-    ("splitFactor", pa.float64()),
-    ("source", pa.string()),
-    ("ingested_at", pa.string()),
-])
+SCHEMA = pa.schema(
+    [
+        ("ticker", pa.string()),
+        ("date", pa.string()),
+        ("open", pa.float64()),
+        ("high", pa.float64()),
+        ("low", pa.float64()),
+        ("close", pa.float64()),
+        ("volume", pa.float64()),
+        ("adjOpen", pa.float64()),
+        ("adjHigh", pa.float64()),
+        ("adjLow", pa.float64()),
+        ("adjClose", pa.float64()),
+        ("adjVolume", pa.float64()),
+        ("divCash", pa.float64()),
+        ("splitFactor", pa.float64()),
+        ("source", pa.string()),
+        ("ingested_at", pa.string()),
+    ]
+)
 
 
 def fetch(session, ticker, start, end, tries=5):
     wait = 2
     for attempt in range(tries):
-        r = session.get(URL.format(ticker=ticker), params={"startDate": start, "endDate": end, "format": "json"}, timeout=60)
+        r = session.get(
+            URL.format(ticker=ticker), params={"startDate": start, "endDate": end, "format": "json"}, timeout=60
+        )
         if r.status_code == 200:
             data = r.json()
             if not isinstance(data, list):
@@ -75,8 +79,16 @@ def main():
     totals = {"files": 0, "rows": 0, "bytes": 0}
     for ticker in [t.strip().upper() for t in args.tickers.split(",") if t.strip()]:
         rows = fetch(session, ticker, start.isoformat(), end.isoformat())
-        recs = [{**{k: r.get(k) for k in SCHEMA.names}, "ticker": ticker, "date": str(r["date"])[:10],
-                 "source": "tiingo", "ingested_at": ingested_at} for r in rows]
+        recs = [
+            {
+                **{k: r.get(k) for k in SCHEMA.names},
+                "ticker": ticker,
+                "date": str(r["date"])[:10],
+                "source": "tiingo",
+                "ingested_at": ingested_at,
+            }
+            for r in rows
+        ]
         out = io.BytesIO()
         pq.write_table(pa.Table.from_pylist(recs, schema=SCHEMA), out, compression="snappy")
         body = out.getvalue()
