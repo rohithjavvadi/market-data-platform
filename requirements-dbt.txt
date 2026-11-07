@@ -1,0 +1,2 @@
+dbt-snowflake==1.12.5
+snowflake-connector-python==5.2.0

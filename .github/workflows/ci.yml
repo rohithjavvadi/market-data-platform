@@ -46,3 +46,37 @@ jobs:
       - run: pip install -r requirements-ci.txt
       - name: pytest
         run: pytest tests -q
+
+  dbt:
+    if: github.event_name == 'pull_request'
+    needs: lint
+    runs-on: ubuntu-latest
+    env:
+      DBT_PROFILES_DIR: ${{ github.workspace }}/transform/ci
+      SNOWFLAKE_PRIVATE_KEY_PATH: /tmp/dbt_key.p8
+      DBT_CI_SCHEMA: PR_${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-dbt.txt
+      - run: pip install -r requirements-dbt.txt
+      - name: Write key
+        env:
+          KEY: ${{ secrets.SNOWFLAKE_DBT_PRIVATE_KEY }}
+        run: printf '%s\n' "$KEY" > /tmp/dbt_key.p8 && chmod 600 /tmp/dbt_key.p8
+      - name: Baseline manifest from base branch
+        run: |
+          git worktree add /tmp/base origin/${{ github.base_ref }}
+          cd /tmp/base/transform
+          dbt deps
+          dbt parse --target dev
+      - name: dbt build (modified + downstream, deferred to DEV)
+        working-directory: transform
+        run: |
+          dbt deps
+          dbt build --target ci --select state:modified+ --exclude resource_type:snapshot --defer --state /tmp/base/transform/target

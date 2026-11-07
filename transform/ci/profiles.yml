@@ -1,0 +1,25 @@
+mdp:
+  target: ci
+  outputs:
+    ci:
+      type: snowflake
+      account: VZKISNL-UC48480
+      user: DBT_SVC
+      role: TRANSFORMER
+      authenticator: snowflake_jwt
+      private_key_path: "{{ env_var('SNOWFLAKE_PRIVATE_KEY_PATH') }}"
+      warehouse: MDP_WH
+      database: ANALYTICS
+      schema: "{{ env_var('DBT_CI_SCHEMA', 'CI') }}"
+      threads: 4
+    dev:
+      type: snowflake
+      account: VZKISNL-UC48480
+      user: DBT_SVC
+      role: TRANSFORMER
+      authenticator: snowflake_jwt
+      private_key_path: "{{ env_var('SNOWFLAKE_PRIVATE_KEY_PATH') }}"
+      warehouse: MDP_WH
+      database: ANALYTICS
+      schema: DEV
+      threads: 4

@@ -1,0 +1,37 @@
+name: pr-cleanup
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  drop-schemas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements-dbt.txt
+      - name: Drop PR_<n> schemas
+        env:
+          KEY: ${{ secrets.SNOWFLAKE_DBT_PRIVATE_KEY }}
+          PREFIX: PR_${{ github.event.pull_request.number }}
+        run: |
+          printf '%s\n' "$KEY" > /tmp/dbt_key.p8 && chmod 600 /tmp/dbt_key.p8
+          python - <<'PY'
+          import os
+          import snowflake.connector
+          con = snowflake.connector.connect(
+              account="VZKISNL-UC48480", user="DBT_SVC", role="TRANSFORMER",
+              authenticator="SNOWFLAKE_JWT", private_key_file="/tmp/dbt_key.p8",
+              warehouse="MDP_WH", database="ANALYTICS",
+          )
+          cur = con.cursor()
+          prefix = os.environ["PREFIX"]
+          names = [r[1] for r in cur.execute("show schemas in database ANALYTICS").fetchall()]
+          for n in names:
+              if n == prefix or n.startswith(prefix + "_"):
+                  cur.execute(f'drop schema if exists ANALYTICS."{n}" cascade')
+                  print("dropped", n)
+          PY
