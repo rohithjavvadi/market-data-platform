@@ -9,6 +9,9 @@ concurrency:
   group: cd-prod
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   dbt-prod:
     runs-on: ubuntu-latest
@@ -39,3 +42,23 @@ jobs:
           name: prod-manifest
           path: transform/target/manifest.json
           retention-days: 30
+      - name: dbt docs (static site)
+        run: |
+          dbt docs generate --target prod --static
+          mkdir -p ../site && cp target/static_index.html ../site/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  docs-pages:
+    needs: dbt-prod
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
