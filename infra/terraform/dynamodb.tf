@@ -31,3 +31,24 @@ resource "aws_iam_user_policy" "ddb_writer" {
 resource "aws_iam_access_key" "ddb_writer" {
   user = aws_iam_user.ddb_writer.name
 }
+
+resource "aws_iam_user" "ddb_reader" {
+  name = "mdp-ddb-reader"
+}
+
+resource "aws_iam_user_policy" "ddb_reader" {
+  name = "mdp-ddb-reader-latest-price"
+  user = aws_iam_user.ddb_reader.name
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["dynamodb:GetItem", "dynamodb:Scan", "dynamodb:DescribeTable"]
+      Resource = aws_dynamodb_table.latest_price.arn
+    }]
+  })
+}
+
+resource "aws_iam_access_key" "ddb_reader" {
+  user = aws_iam_user.ddb_reader.name
+}

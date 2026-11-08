@@ -29,11 +29,11 @@ with DAG(
     )
     dbt_build = BashOperator(
         task_id="dbt_build",
-        bash_command=f"cd {REPO}/transform && {DBT} build",
+        bash_command=f"cd {REPO}/transform && {DBT} build --target prod",
     )
     freshness = BashOperator(
         task_id="dbt_source_freshness",
-        bash_command=f"cd {REPO}/transform && {DBT} source freshness",
+        bash_command=f"cd {REPO}/transform && {DBT} source freshness --target prod",
     )
     spark_silver = BashOperator(
         task_id="spark_bronze_to_silver",
