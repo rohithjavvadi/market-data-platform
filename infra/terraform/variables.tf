@@ -33,5 +33,5 @@ variable "snowflake_private_key_path" {
 
 variable "snowflake_monthly_credit_quota" {
   type    = number
-  default = 10
+  default = 25
 }
