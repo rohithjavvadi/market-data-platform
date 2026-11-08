@@ -1,33 +1,35 @@
+import json
 import math
 import os
 import time
+from pathlib import Path
 
 import boto3
 import pandas as pd
 import plotly.graph_objects as go
+import queries as Q
 import snowflake.connector
 import streamlit as st
-from cryptography.hazmat.primitives import serialization
 from plotly.subplots import make_subplots
 
 st.set_page_config(page_title="Market Data Platform", layout="wide")
 
+SNAP_DIR = Path(__file__).parent / "snapshot"
 RANGES = {"3M": 63, "1Y": 252, "3Y": 756, "All": None}
 MARGIN = {"l": 10, "r": 10, "t": 10, "b": 10}
+ARCH = "Finnhub stream → Redpanda → S3 → Spark + Snowflake/dbt (PROD marts) · latest price served from DynamoDB"
+
+
+def secret(name):
+    try:
+        return st.secrets[name]
+    except Exception:
+        return None
 
 
 @st.cache_resource
 def sf_conn():
-    cfg = st.secrets["snowflake"]
-    kwargs = {k: cfg[k] for k in ("account", "user", "role", "warehouse", "database", "schema")}
-    if cfg.get("private_key"):
-        key = serialization.load_pem_private_key(cfg["private_key"].encode(), password=None)
-        kwargs["private_key"] = key.private_bytes(
-            serialization.Encoding.DER, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
-        )
-    else:
-        kwargs["private_key_file"] = os.path.expanduser(cfg["private_key_path"])
-    return snowflake.connector.connect(authenticator="SNOWFLAKE_JWT", client_session_keep_alive=True, **kwargs)
+    return snowflake.connector.connect(**Q.connect_kwargs(secret("snowflake")))
 
 
 def _run(sql, params):
@@ -50,9 +52,61 @@ def q(sql, params=None):
         return _run(sql, params or {})
 
 
+@st.cache_data(ttl=600, show_spinner="Connecting to Snowflake...")
+def warehouse_up():
+    if os.environ.get("MDP_FORCE_SNAPSHOT") or secret("snowflake") is None:
+        return False
+    try:
+        _run("select 1", {})
+        return True
+    except Exception:
+        sf_conn.clear()
+        return False
+
+
+@st.cache_data(show_spinner=False)
+def snap(name):
+    return pd.read_parquet(SNAP_DIR / f"{name}.parquet")
+
+
+def snap_meta():
+    try:
+        return json.loads((SNAP_DIR / "meta.json").read_text())
+    except Exception:
+        return {}
+
+
+def securities(live):
+    return q(Q.DIM_SECURITY_CURRENT) if live else snap("dim_security_current")
+
+
+def daily_bars(live, ticker):
+    if live:
+        return q(Q.DAILY_BARS_ONE, {"t": ticker})
+    d = snap("daily_bars")
+    return d[d.ticker == ticker].reset_index(drop=True)
+
+
+def symbols_1m(live):
+    df = q(Q.SYMBOLS_1M) if live else snap("ohlcv_1m")[["symbol"]].drop_duplicates()
+    return sorted(df.symbol.tolist())
+
+
+def ohlcv(live, sym, hours):
+    if live:
+        return q(Q.OHLCV_ONE, {"s": sym, "h": hours})
+    d = snap("ohlcv_1m")
+    d = d[d.symbol == sym]
+    return d[d.bar_ts_utc > d.bar_ts_utc.max() - pd.Timedelta(hours=hours)].reset_index(drop=True)
+
+
+def health(live):
+    return q(Q.HEALTH) if live else snap("health")
+
+
 @st.cache_resource
 def ddb_table():
-    a = st.secrets["aws"]
+    a = secret("aws")
     return boto3.resource(
         "dynamodb",
         region_name=a.get("region", "us-east-2"),
@@ -62,17 +116,13 @@ def ddb_table():
 
 
 def latest_prices():
-    items = ddb_table().scan().get("Items", [])
-    rows = [
-        {
-            "symbol": i["symbol"],
-            "price": float(i["price"]),
-            "trade_ts_ms": int(i["trade_ts_ms"]),
-            "trades_seen": int(i.get("trades_seen", 0)),
-        }
-        for i in items
-    ]
-    return pd.DataFrame(rows).sort_values("symbol") if rows else pd.DataFrame()
+    if not os.environ.get("MDP_FORCE_SNAPSHOT"):
+        try:
+            return pd.DataFrame(Q.price_rows(ddb_table().scan().get("Items", []))), "live"
+        except Exception:
+            ddb_table.clear()
+    path = SNAP_DIR / "latest_price.parquet"
+    return (pd.read_parquet(path) if path.exists() else pd.DataFrame()), "snapshot"
 
 
 def fmt_age(seconds):
@@ -84,42 +134,29 @@ def fmt_age(seconds):
 
 @st.fragment(run_every="10s")
 def live_panel():
-    st.subheader("Last trade, live from DynamoDB")
-    try:
-        df = latest_prices()
-    except Exception as e:
-        st.warning(f"Live feed unavailable: {e}")
-        return
+    df, src = latest_prices()
+    st.subheader("Last trade, live from DynamoDB" if src == "live" else "Last trade (snapshot)")
     if df.empty:
-        st.info("No live prices yet.")
+        st.info("No prices available.")
         return
     now_ms = time.time() * 1000
+    df = df.sort_values("symbol")
     cols = st.columns(min(len(df), 6))
     for i, r in enumerate(df.itertuples(index=False)):
         age = max(0.0, (now_ms - r.trade_ts_ms) / 1000)
-        cols[i % len(cols)].metric(r.symbol, f"{r.price:,.2f}", f"{fmt_age(age)} ago", delta_color="off")
-    st.caption(
-        f"Refreshes every 10 s. {int(df.trades_seen.sum()):,} trades folded into these rows by the stream writer."
-    )
+        cols[i % len(cols)].metric(f"{r.symbol} · {fmt_age(age)} ago", f"{r.price:,.2f}")
+    note = "Refreshes every 10 s. " if src == "live" else ""
+    st.caption(f"{note}{int(df.trades_seen.sum()):,} trades folded into these rows by the stream writer.")
 
 
-def daily_tab():
-    sec = q("select ticker, company_name, asset_class from dim_security where is_current order by ticker")
+def daily_tab(live):
+    sec = securities(live)
     eq = sec[sec.asset_class == "equity"]
     labels = {r.ticker: f"{r.ticker} · {r.company_name}" for r in eq.itertuples()}
     c1, c2 = st.columns([2, 1])
     ticker = c1.selectbox("Ticker", list(labels), format_func=labels.get)
     rng = c2.radio("Range", list(RANGES), index=1, horizontal=True)
-    df = q(
-        """
-        select b.bar_date, b.adj_close::float as adj_close, b.daily_return::float as daily_return
-        from fct_daily_bars b
-        join dim_security s on b.security_sk = s.security_sk
-        where b.ticker = %(t)s
-        order by b.bar_date
-        """,
-        {"t": ticker},
-    )
+    df = daily_bars(live, ticker)
     if df.empty:
         st.info("No daily bars for this ticker.")
         return
@@ -130,7 +167,7 @@ def daily_tab():
     vol = view.daily_return.dropna().std() * math.sqrt(252)
     dd = (view.adj_close / view.adj_close.cummax() - 1).min()
     k = st.columns(4)
-    k[0].metric("Adj close", f"{last:,.2f}", f"as of {view.bar_date.iloc[-1]}", delta_color="off")
+    k[0].metric(f"Adj close · {view.bar_date.iloc[-1]}", f"{last:,.2f}")
     k[1].metric(f"Return ({rng})", f"{ret:+.1%}")
     k[2].metric("Annualised volatility", f"{vol:.1%}")
     k[3].metric("Max drawdown", f"{dd:.1%}")
@@ -143,8 +180,8 @@ def daily_tab():
     st.caption("Each bar joins to the dim_security (SCD2) version valid on its date.")
 
 
-def intraday_tab():
-    syms = q("select distinct symbol from fct_ohlcv_1m order by 1").symbol.tolist()
+def intraday_tab(live):
+    syms = symbols_1m(live)
     if not syms:
         st.info("No one-minute bars yet.")
         return
@@ -152,17 +189,7 @@ def intraday_tab():
     default = syms.index("BINANCE:BTCUSDT") if "BINANCE:BTCUSDT" in syms else 0
     sym = c1.selectbox("Symbol", syms, index=default)
     hours = c2.slider("Hours, ending at the latest bar", 1, 48, 6)
-    df = q(
-        """
-        with mx as (select max(bar_ts_utc) as m from fct_ohlcv_1m where symbol = %(s)s)
-        select f.bar_ts_utc, f.open::float as open, f.high::float as high, f.low::float as low,
-               f.close::float as close, f.volume::float as volume, f.vwap::float as vwap, f.trade_count
-        from fct_ohlcv_1m f, mx
-        where f.symbol = %(s)s and f.bar_ts_utc > dateadd(hour, -%(h)s, mx.m)
-        order by f.bar_ts_utc
-        """,
-        {"s": sym, "h": hours},
-    )
+    df = ohlcv(live, sym, hours)
     k = st.columns(3)
     k[0].metric("Bars", f"{len(df):,}")
     k[1].metric("Trades", f"{int(df.trade_count.sum()):,}")
@@ -179,31 +206,25 @@ def intraday_tab():
     st.plotly_chart(fig, width="stretch")
 
 
-def health_tab():
-    df = q(
-        """
-        select 'fct_ohlcv_1m' as model, count(*) as row_count, max(bar_ts_utc)::string as latest_data,
-               convert_timezone('UTC', max(max_loaded_at))::timestamp_ntz::string as last_loaded_utc
-        from fct_ohlcv_1m
-        union all
-        select 'fct_daily_bars', count(*), max(bar_date)::string, max(ingested_at_utc)::string from fct_daily_bars
-        union all
-        select 'dim_security', count(*), null, null from dim_security
-        union all
-        select 'dim_date', count(*), max(date_day)::string, null from dim_date
-        """
-    )
-    st.dataframe(df, hide_index=True, width="stretch")
+def health_tab(live):
+    st.dataframe(health(live), hide_index=True, width="stretch")
     st.caption("PROD marts are rebuilt by Airflow every 15 min on weekdays (14:00-21:45 UTC). Queries cached 10 min.")
 
 
+LIVE = warehouse_up()
 st.title("Market Data Platform")
-st.caption("Finnhub stream → Redpanda → S3 → Spark + Snowflake/dbt (PROD marts) · latest price served from DynamoDB")
+st.caption(ARCH)
+if not LIVE:
+    exported = snap_meta().get("exported_at_utc", "unknown")
+    st.info(
+        f"Showing a snapshot exported {exported} UTC: the live Snowflake warehouse is offline. "
+        "Pipeline code, tests and CI history are in the repo."
+    )
 live_panel()
 tab_daily, tab_intraday, tab_health = st.tabs(["Daily", "Intraday", "Pipeline health"])
 with tab_daily:
-    daily_tab()
+    daily_tab(LIVE)
 with tab_intraday:
-    intraday_tab()
+    intraday_tab(LIVE)
 with tab_health:
-    health_tab()
+    health_tab(LIVE)
