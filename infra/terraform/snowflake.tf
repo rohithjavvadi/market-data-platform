@@ -129,4 +129,45 @@ resource "snowflake_grant_privileges_to_account_role" "reporter_analytics_db" {
     object_name = snowflake_database.analytics.name
   }
 }
-# REPORTER schema/table grants on MARTS are added in week 2, once dbt creates the schema.
+
+# REPORTER: read PROD marts only (schema is created by dbt CD)
+locals {
+  prod_marts = "\"${snowflake_database.analytics.name}\".\"PROD_MARTS\""
+}
+
+resource "snowflake_grant_privileges_to_account_role" "reporter_prod_marts_usage" {
+  provider          = snowflake.admin
+  account_role_name = snowflake_account_role.role["REPORTER"].name
+  privileges        = ["USAGE"]
+  on_schema {
+    schema_name = local.prod_marts
+  }
+}
+
+resource "snowflake_grant_privileges_to_account_role" "reporter_prod_marts_select" {
+  provider = snowflake.admin
+  for_each = {
+    all_tables    = { scope = "all", plural = "TABLES" }
+    all_views     = { scope = "all", plural = "VIEWS" }
+    future_tables = { scope = "future", plural = "TABLES" }
+    future_views  = { scope = "future", plural = "VIEWS" }
+  }
+  account_role_name = snowflake_account_role.role["REPORTER"].name
+  privileges        = ["SELECT"]
+  on_schema_object {
+    dynamic "all" {
+      for_each = each.value.scope == "all" ? [1] : []
+      content {
+        object_type_plural = each.value.plural
+        in_schema          = local.prod_marts
+      }
+    }
+    dynamic "future" {
+      for_each = each.value.scope == "future" ? [1] : []
+      content {
+        object_type_plural = each.value.plural
+        in_schema          = local.prod_marts
+      }
+    }
+  }
+}

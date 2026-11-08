@@ -28,7 +28,7 @@ def snowflake_bars(day, cutoff):
         cur.execute(
             """
             select bar_key, open, high, low, close, volume, vwap, trade_count
-            from ANALYTICS.DEV_MARTS.FCT_OHLCV_1M
+            from ANALYTICS.PROD_MARTS.FCT_OHLCV_1M
             where to_varchar(bar_ts_utc, 'YYYY-MM-DD HH24:MI') >= %s
               and to_varchar(bar_ts_utc, 'YYYY-MM-DD HH24:MI') < %s
             """,

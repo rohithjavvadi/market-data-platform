@@ -23,3 +23,12 @@ output "ddb_writer_secret_access_key" {
   value     = aws_iam_access_key.ddb_writer.secret
   sensitive = true
 }
+
+output "ddb_reader_access_key_id" {
+  value = aws_iam_access_key.ddb_reader.id
+}
+
+output "ddb_reader_secret_access_key" {
+  value     = aws_iam_access_key.ddb_reader.secret
+  sensitive = true
+}
