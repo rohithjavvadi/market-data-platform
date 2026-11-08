@@ -15,7 +15,7 @@ with DAG(
     dag_id="mdp_pipeline",
     description="COPY bronze to RAW, dbt build + freshness; Spark silver + 1m bars; parity gate.",
     start_date=pendulum.datetime(2026, 11, 1, tz="UTC"),
-    schedule="*/15 * * * *",
+    schedule="*/15 14-21 * * 1-5",
     catchup=False,
     max_active_runs=1,
     deadline=deadline(20, "mdp_pipeline"),
