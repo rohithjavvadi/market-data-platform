@@ -31,3 +31,12 @@ services:
       AWS_PROFILE: default
     volumes:
       - ~/.aws:/root/.aws:ro
+
+  latest-price-writer:
+    <<: *app
+    build:
+      context: ..
+      dockerfile: consumer/Dockerfile
+    container_name: latest-price-writer
+    command: ["python", "-u", "consumer/latest_price_writer.py", "--bootstrap", "redpanda-0:9092"]
+    env_file: ddb.env
