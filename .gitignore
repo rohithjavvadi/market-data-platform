@@ -28,3 +28,4 @@ logs/
 tf.plan
 *.plan
 streaming/ddb.env
+dashboard/.streamlit/secrets.toml
