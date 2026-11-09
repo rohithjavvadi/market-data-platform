@@ -39,6 +39,31 @@ def snowflake_bars(day, cutoff):
         conn.close()
 
 
+def split_key(df):
+    parts = F.split("bar_key", r"\|")
+    return df.withColumn("symbol", parts.getItem(0)).withColumn("k", parts.getItem(1))
+
+
+def watermark_filter(lake, wh):
+    """Keep only bars strictly older than the newest bar both sides have for that symbol.
+
+    Each symbol's trades live in one ordered Kafka partition, so every bar before the
+    common watermark is complete in both systems; later bars may still be in flight.
+    """
+    lake_s, wh_s = split_key(lake), split_key(wh)
+    wm = (
+        lake_s.groupBy("symbol")
+        .agg(F.max("k").alias("lake_wm"))
+        .join(wh_s.groupBy("symbol").agg(F.max("k").alias("wh_wm")), "symbol", "full_outer")
+        .select("symbol", "lake_wm", "wh_wm", F.least("lake_wm", "wh_wm").alias("wm"))
+    )
+
+    def keep(df):
+        return df.join(wm.select("symbol", "wm"), "symbol").where(F.col("k") < F.col("wm")).drop("symbol", "k", "wm")
+
+    return keep(lake_s), keep(wh_s), wm
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--date", default=datetime.now(timezone.utc).date().isoformat())
@@ -66,6 +91,9 @@ def main():
         "bar_key string, open double, high double, low double, close double, "
         "volume double, vwap double, trade_count long",
     )
+
+    lake, wh, wm = watermark_filter(lake, wh)
+    wm.orderBy("symbol").show(20, False)
 
     j = lake.alias("s").join(wh.alias("w"), "bar_key", "full_outer").cache()
     only_spark = j.where(F.col("w.trade_count").isNull()).count()
