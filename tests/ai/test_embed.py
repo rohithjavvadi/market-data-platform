@@ -1,16 +1,14 @@
 import numpy as np
 import pyarrow as pa
 
-from ai.ingest.embed import MODEL_ID, build_rows, fit_to_limit, to_table
+from ai.ingest.embed import MODEL_ID, build_rows, embed_text, fit_to_limit, to_table
 
-HTML = "".join(
-    f"<p>{x}</p>"
-    for x in ["Item 1. Business", "word " * 300, "Item 1A. Risk Factors", "risk " * 10]
-)
+HTML = "".join(f"<p>{x}</p>" for x in ["Item 1. Business", "word " * 300, "Item 1A. Risk Factors", "risk " * 10])
+FILING = {"form": "10-K", "filing_date": "2026-11-03"}
 
 
 def test_build_rows_items_and_chunk_idx():
-    rows = build_rows("AAPL", {"form": "10-K", "filing_date": "2026-11-03"}, HTML)
+    rows = build_rows("AAPL", FILING, HTML)
     assert [(r["item"], r["chunk_idx"]) for r in rows] == [
         ("1", 0),
         ("1", 1),
@@ -19,10 +17,23 @@ def test_build_rows_items_and_chunk_idx():
     assert {r["ticker"] for r in rows} == {"AAPL"}
 
 
+def test_context_line():
+    row = build_rows("AAPL", FILING, HTML)[-1]
+    assert row["context"] == "Apple (AAPL) 10-K filed 2026-11-03, Item 1A. Risk Factors"
+    assert embed_text(row).startswith(row["context"] + "\n")
+    assert not row["text"].startswith("Apple")
+
+
+def test_context_counts_toward_token_limit():
+    def words_x2(s: str) -> int:
+        return 2 * len(s.split())
+
+    rows = build_rows("AAPL", FILING, HTML, count_tokens=words_x2)
+    assert all(words_x2(embed_text(r)) <= 512 for r in rows)
+
+
 def test_to_table_schema():
-    rows = [
-        {"ticker": "AAPL", "item": "1", "chunk_idx": i, "text": "a"} for i in range(2)
-    ]
+    rows = [{"ticker": "AAPL", "item": "1", "chunk_idx": i, "text": "a"} for i in range(2)]
     t = to_table(rows, np.ones((2, 384)))
     assert t.num_rows == 2
     assert t.schema.field("embedding").type == pa.list_(pa.float32(), 384)

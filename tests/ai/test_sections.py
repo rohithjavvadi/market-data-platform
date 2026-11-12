@@ -80,3 +80,24 @@ def test_part_cross_reference_with_comma_ignored():
 
 def test_10k_keys_have_no_part():
     assert list(split_items(_html("PART I", "Item 1. Business", BODY))) == ["1"]
+
+
+def test_running_page_headers_merge_into_one_section():
+    html = _html(
+        "Item 6. [Reserved]",
+        "Item 7. MDA",
+        BODY,
+        "PART II",
+        "Item 7",
+        BODY,
+        "PART II",
+        "Item 7",
+        BODY,
+        BODY,
+        BODY,
+        "Item 8. Financial Statements",
+        BODY,
+    )
+    s = split_items(html)
+    assert s["6"] == "Item 6. [Reserved]"
+    assert s["7"].count(BODY.strip()) == 5

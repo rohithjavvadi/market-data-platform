@@ -41,6 +41,10 @@ def split_items(html: str, form: str = "10-K") -> dict[str, str]:
             item = m.group(1).upper()
             hits.append((i, f"{part}-{item}" if use_parts and part else item))
 
+    # Running page headers ("PART II / Item 7" on every page) repeat the same
+    # key back to back; keep only the first hit of each run.
+    hits = [h for k, h in enumerate(hits) if k == 0 or h[1] != hits[k - 1][1]]
+
     best: dict[str, tuple[int, int]] = {}  # key -> (char_length, start_line)
     for k, (start, key) in enumerate(hits):
         end = hits[k + 1][0] if k + 1 < len(hits) else len(lines)

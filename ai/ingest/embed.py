@@ -21,6 +21,13 @@ TICKERS = {
     "AMZN": "0001018724",
     "GOOGL": "0001652044",
 }
+NAMES = {
+    "AAPL": "Apple",
+    "MSFT": "Microsoft",
+    "NVDA": "NVIDIA",
+    "AMZN": "Amazon",
+    "GOOGL": "Alphabet (Google)",
+}
 
 
 def fit_to_limit(chunk: str, count_tokens: Callable[[str], int], limit: int = MAX_TOKENS) -> list[str]:
@@ -34,6 +41,10 @@ def fit_to_limit(chunk: str, count_tokens: Callable[[str], int], limit: int = MA
     )
 
 
+def embed_text(row: dict) -> str:
+    return f"{row['context']}\n{row['text']}"
+
+
 def build_rows(
     ticker: str,
     filing: dict,
@@ -41,18 +52,22 @@ def build_rows(
     count_tokens: Callable[[str], int] | None = None,
 ) -> list[dict]:
     rows = []
-    for item, text in split_items(html, form=filing["form"]).items():
+    form, date = filing["form"], str(filing["filing_date"])
+    for item, text in split_items(html, form=form).items():
+        heading = text.split("\n", 1)[0][:120]
+        context = f"{NAMES.get(ticker, ticker)} ({ticker}) {form} filed {date}, {heading}"
         chunks = chunk_words(clean(text))
         if count_tokens:
-            chunks = [p for c in chunks for p in fit_to_limit(c, count_tokens)]
+            chunks = [p for c in chunks for p in fit_to_limit(c, lambda s, h=context: count_tokens(f"{h}\n{s}"))]
         for i, chunk in enumerate(chunks):
             rows.append(
                 {
                     "ticker": ticker,
-                    "form": filing["form"],
-                    "filing_date": str(filing["filing_date"]),
+                    "form": form,
+                    "filing_date": date,
                     "item": item,
                     "chunk_idx": i,
+                    "context": context,
                     "text": chunk,
                 }
             )
@@ -89,7 +104,7 @@ def main() -> None:
                 if not rows:
                     print(f"{t} {form} {f['filing_date']}: no sections found")
                     continue
-                texts = [r["text"] for r in rows]
+                texts = [embed_text(r) for r in rows]
                 n_long = sum(count(x) > MAX_TOKENS for x in texts)
                 emb = model.encode(texts, batch_size=32, normalize_embeddings=True)
                 path = Path(a.out) / f"{t}_{f['filing_date']}_{form}.parquet"
