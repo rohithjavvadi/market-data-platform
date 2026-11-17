@@ -25,7 +25,7 @@ def enc(_q: str) -> list[float]:
 
 
 def test_ranks_by_cosine(tmp_path):
-    hits = search_filings("q", encode=enc, source=_source(tmp_path))
+    hits = search_filings("q", mode="vector", encode=enc, source=_source(tmp_path))
     assert [h["ticker"] for h in hits] == ["AAPL", "NVDA", "MSFT"]
     assert hits[0]["score"] == 1.0
 
@@ -47,3 +47,11 @@ def test_k_is_clamped(tmp_path):
     src = _source(tmp_path)
     assert len(search_filings("q", k=0, encode=enc, source=src)) == 1
     assert len(search_filings("q", k=100, encode=enc, source=src)) == 3
+
+
+def test_hybrid_keyword_match_lifts_rank(tmp_path):
+    src = _source(tmp_path)
+    vector = search_filings("msft mdna", mode="vector", encode=enc, source=src)
+    hybrid = search_filings("msft mdna", encode=enc, source=src)
+    assert vector[0]["ticker"] == "AAPL"
+    assert hybrid[0]["ticker"] == "MSFT" and hybrid[0]["kw"]

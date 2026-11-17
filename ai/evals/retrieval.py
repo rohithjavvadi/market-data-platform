@@ -45,20 +45,28 @@ def summarize(rows: list[dict]) -> dict:
 
 
 if __name__ == "__main__":
+    from functools import partial
+
     from ai.agent.tools import search_filings
+    from ai.evals.cases import HARD_CASES
 
     p = argparse.ArgumentParser()
     p.add_argument("-k", type=int, default=5)
     p.add_argument("--out", default="ai/out/evals")
     a = p.parse_args()
     all_rows = []
-    for use_ticker in (False, True):
-        rows = evaluate(SEARCH_CASES, search_filings, a.k, use_ticker)
-        all_rows += rows
-        print(f"ticker filter={use_ticker}:", summarize(rows))
-        for r in rows:
-            if r["rank"] != 1:
-                print(f"   {r['id']:<18} rank={r['rank']} top={r['top']}")
+    for mode in ("vector", "hybrid"):
+        search = partial(search_filings, mode=mode)
+        for set_name, cases in (("standard", SEARCH_CASES), ("hard", HARD_CASES)):
+            for use_ticker in (False, True):
+                rows = evaluate(cases, search, a.k, use_ticker)
+                for r in rows:
+                    r["set"], r["mode"] = set_name, mode
+                all_rows += rows
+                print(f"{mode:<6} {set_name:<8} ticker={use_ticker!s:<5}", summarize(rows))
+                for r in rows:
+                    if r["rank"] != 1:
+                        print(f"      {r['id']:<16} rank={r['rank']} top={r['top']}")
     Path(a.out).mkdir(parents=True, exist_ok=True)
     path = Path(a.out) / f"retrieval_{datetime.now(UTC):%Y%m%dT%H%M}.parquet"
     pq.write_table(pa.Table.from_pylist(all_rows), path)

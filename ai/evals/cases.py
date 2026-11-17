@@ -76,3 +76,48 @@ SEARCH_CASES = [
         "question": "Alphabet capital expenditures on AI and technical infrastructure",
     },
 ]
+
+# No company names: the question only names products/segments.
+HARD_CASES = [
+    {
+        "id": "h_iphone_geo",
+        "ticker": "AAPL",
+        "items": ["7", "I-2"],
+        "question": "iPhone net sales by geographic segment",
+    },
+    {
+        "id": "h_wearables",
+        "ticker": "AAPL",
+        "items": ["7", "I-2"],
+        "question": "Wearables, Home and Accessories net sales change",
+    },
+    {
+        "id": "h_app_store",
+        "ticker": "AAPL",
+        "items": ["1A", "II-1A", "3", "II-1"],
+        "question": "App Store commission changes required by regulators",
+    },
+    {"id": "h_xbox", "ticker": "MSFT", "items": ["7", "I-2"], "question": "Xbox content and services revenue"},
+    {"id": "h_linkedin", "ticker": "MSFT", "items": ["7", "I-2"], "question": "LinkedIn revenue growth"},
+    {"id": "h_cuda", "ticker": "NVDA", "items": ["1"], "question": "CUDA software platform and developer ecosystem"},
+    {
+        "id": "h_ai_export",
+        "ticker": "NVDA",
+        "items": ["1A", "II-1A"],
+        "question": "Licensing requirements for shipping AI accelerators to China",
+    },
+    {
+        "id": "h_prime",
+        "ticker": "AMZN",
+        "items": ["1", "7", "I-2"],
+        "question": "Prime membership benefits and subscription services",
+    },
+    {"id": "h_3p_seller", "ticker": "AMZN", "items": ["7", "I-2"], "question": "Third-party seller services revenue"},
+    {"id": "h_youtube", "ticker": "GOOGL", "items": ["7", "I-2"], "question": "YouTube ads revenue"},
+    {
+        "id": "h_other_bets",
+        "ticker": "GOOGL",
+        "items": ["7", "I-2", "8", "I-1"],
+        "question": "Other Bets operating loss",
+    },
+]
