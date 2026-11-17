@@ -1,18 +1,23 @@
-"""Agent loop: an LLM answers questions about SEC filings using tools."""
+"""Agent loop: an LLM answers market questions using filing and price tools."""
 
 import argparse
+import json
 from dataclasses import dataclass, field
 from typing import Protocol
 
+from ai.agent.prices import PERIODS, get_price_stats
 from ai.agent.tools import search_filings
 
 TICKERS = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL"]
 SYSTEM = (
-    "You are a market research assistant. Answer questions about AAPL, MSFT, "
-    "NVDA, AMZN and GOOGL using only search_filings results. Always search "
-    "before answering. Cite every claim with the tag shown in the results, "
-    "like [NVDA 10-K 1A 2026-02-25]. If the results do not contain the "
-    "answer, say so. Be concise."
+    "You are a market research assistant for AAPL, MSFT, NVDA, AMZN and GOOGL. "
+    "Use search_filings for what companies say in their 10-K/10-Q filings "
+    "(risks, strategy, results). Use get_price_stats for stock performance "
+    "(return, volatility, drawdown). Call a tool before answering and never use "
+    "outside knowledge. Cite every sentence with the tag shown in the tool "
+    "results, e.g. [NVDA 10-K 1A 2026-02-25] or [PRICES AMZN 2025-11-06..2026-11-06]. "
+    "Mention the end date of any price data. If the tools do not answer the "
+    "question, say so. Be concise."
 )
 SEARCH_TOOL = {
     "type": "function",
@@ -35,7 +40,24 @@ SEARCH_TOOL = {
         },
     },
 }
-TOOL_FUNCS = {"search_filings": search_filings}
+PRICE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_price_stats",
+        "description": "Total return, annualized volatility, max drawdown and "
+        "high/low for one ticker over a trailing period (daily adjusted closes).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string", "enum": TICKERS},
+                "period": {"type": "string", "enum": PERIODS},
+            },
+            "required": ["ticker"],
+        },
+    },
+}
+SCHEMAS = {"search_filings": SEARCH_TOOL, "get_price_stats": PRICE_TOOL}
+TOOL_FUNCS = {"search_filings": search_filings, "get_price_stats": get_price_stats}
 
 
 @dataclass
@@ -76,18 +98,33 @@ def cite(h: dict) -> str:
     return f"[{h['ticker']} {h['form']} {h['item']} {h['filing_date']}]"
 
 
-def run_tool(call: ToolCall, funcs: dict) -> tuple[str, list[dict]]:
+def format_search(hits: list[dict]) -> tuple[str, list[str]]:
+    if not hits:
+        return "No matching passages.", []
+    text = "\n\n".join(f"{cite(h)} (score {h['score']})\n{h['text']}" for h in hits)
+    return text, [cite(h) for h in hits]
+
+
+def format_prices(stats: dict) -> tuple[str, list[str]]:
+    if "error" in stats:
+        return json.dumps(stats), []
+    tag = f"[PRICES {stats['ticker']} {stats['start_date']}..{stats['end_date']}]"
+    return f"{tag}\n{json.dumps(stats)}", [tag]
+
+
+FORMATTERS = {"search_filings": format_search, "get_price_stats": format_prices}
+
+
+def run_tool(call: ToolCall, funcs: dict) -> tuple[str, list[str]]:
     fn = funcs.get(call.name)
     if fn is None:
         return f"Error: unknown tool {call.name}", []
     try:
-        hits = fn(**call.args)
+        out = fn(**call.args)
     except (TypeError, ValueError) as e:
         return f"Error: {e}", []
-    if not hits:
-        return "No matching passages.", []
-    text = "\n\n".join(f"{cite(h)} (score {h['score']})\n{h['text']}" for h in hits)
-    return text, hits
+    fmt = FORMATTERS.get(call.name)
+    return fmt(out) if fmt else (json.dumps(out, default=str), [])
 
 
 @dataclass
@@ -100,6 +137,7 @@ class Result:
 
 def run(question: str, llm: LLM, funcs: dict | None = None, max_steps: int = 4) -> Result:
     funcs = funcs or TOOL_FUNCS
+    schemas = [SCHEMAS[n] for n in funcs if n in SCHEMAS]
     messages = [
         {"role": "system", "content": SYSTEM},
         {"role": "user", "content": question},
@@ -107,8 +145,7 @@ def run(question: str, llm: LLM, funcs: dict | None = None, max_steps: int = 4) 
     calls: list[ToolCall] = []
     sources: list[str] = []
     for step in range(1, max_steps + 1):
-        tools = [SEARCH_TOOL] if step < max_steps else []
-        reply = llm.chat(messages, tools)
+        reply = llm.chat(messages, schemas if step < max_steps else [])
         if not reply.tool_calls:
             return Result(reply.content.strip(), step, calls, sources)
         messages.append(
@@ -120,10 +157,10 @@ def run(question: str, llm: LLM, funcs: dict | None = None, max_steps: int = 4) 
         )
         for c in reply.tool_calls:
             calls.append(c)
-            text, hits = run_tool(c, funcs)
-            for h in hits:
-                if cite(h) not in sources:
-                    sources.append(cite(h))
+            text, srcs = run_tool(c, funcs)
+            for s in srcs:
+                if s not in sources:
+                    sources.append(s)
             messages.append({"role": "tool", "tool_name": c.name, "content": text})
     return Result("Stopped: no final answer.", max_steps, calls, sources)
 

@@ -1,4 +1,4 @@
-from ai.agent.loop import Reply, ToolCall, run
+from ai.agent.loop import Reply, ToolCall, format_prices, run
 
 HIT = {
     "ticker": "NVDA",
@@ -56,3 +56,23 @@ def test_last_step_has_no_tools():
     r = run("q", llm, funcs={"search_filings": lambda **kw: []}, max_steps=3)
     assert [len(t) for _, t in llm.seen] == [1, 1, 0]
     assert (r.answer, r.steps) == ("final", 3)
+
+
+def test_price_tool_routing_and_tag():
+    stats = {
+        "ticker": "AMZN",
+        "start_date": "2025-11-06",
+        "end_date": "2026-11-06",
+        "total_return_pct": 6.69,
+    }
+    call = ToolCall("get_price_stats", {"ticker": "AMZN", "period": "1y"})
+    llm = FakeLLM([Reply("", [call]), Reply("ok")])
+    r = run("q", llm, funcs={"get_price_stats": lambda **kw: stats})
+    assert r.sources == ["[PRICES AMZN 2025-11-06..2026-11-06]"]
+    assert llm.seen[0][1][0]["function"]["name"] == "get_price_stats"
+    assert "6.69" in llm.seen[1][0][-1]["content"]
+
+
+def test_price_error_has_no_source():
+    text, srcs = format_prices({"ticker": "ZZZ", "error": "no price data"})
+    assert srcs == [] and "no price data" in text
