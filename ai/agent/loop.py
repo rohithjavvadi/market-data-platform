@@ -23,17 +23,17 @@ SEARCH_TOOL = {
     "type": "function",
     "function": {
         "name": "search_filings",
-        "description": "Semantic search over the latest 10-K and 10-Q text.",
+        "description": (
+            "Keyword + semantic search over the latest 10-K and 10-Q text of "
+            "AAPL, MSFT, NVDA, AMZN and GOOGL. Set ticker whenever the company is "
+            "known, including when the question only names one of its products, "
+            "brands or segments."
+        ),
         "parameters": {
             "type": "object",
             "properties": {
-                "query": {"type": "string", "description": "What to look for"},
+                "query": {"type": "string", "description": "What to look for, in plain words"},
                 "ticker": {"type": "string", "enum": TICKERS},
-                "form": {"type": "string", "enum": ["10-K", "10-Q"]},
-                "item": {
-                    "type": "string",
-                    "description": "Item number, e.g. 1A risk factors, 7 MD&A, 1 business",
-                },
                 "k": {"type": "integer", "description": "Results, 1-10 (default 5)"},
             },
             "required": ["query"],
@@ -135,6 +135,9 @@ class Result:
     sources: list[str]
 
 
+NUDGE = "Call one of the tools before answering. Answer only from tool results."
+
+
 def run(question: str, llm: LLM, funcs: dict | None = None, max_steps: int = 4) -> Result:
     funcs = funcs or TOOL_FUNCS
     schemas = [SCHEMAS[n] for n in funcs if n in SCHEMAS]
@@ -144,9 +147,15 @@ def run(question: str, llm: LLM, funcs: dict | None = None, max_steps: int = 4) 
     ]
     calls: list[ToolCall] = []
     sources: list[str] = []
+    nudged = False
     for step in range(1, max_steps + 1):
         reply = llm.chat(messages, schemas if step < max_steps else [])
         if not reply.tool_calls:
+            if not calls and not nudged and step < max_steps - 1:
+                nudged = True
+                messages.append({"role": "assistant", "content": reply.content})
+                messages.append({"role": "user", "content": NUDGE})
+                continue
             return Result(reply.content.strip(), step, calls, sources)
         messages.append(
             {
@@ -158,9 +167,9 @@ def run(question: str, llm: LLM, funcs: dict | None = None, max_steps: int = 4) 
         for c in reply.tool_calls:
             calls.append(c)
             text, srcs = run_tool(c, funcs)
-            for s in srcs:
-                if s not in sources:
-                    sources.append(s)
+            for x in srcs:
+                if x not in sources:
+                    sources.append(x)
             messages.append({"role": "tool", "tool_name": c.name, "content": text})
     return Result("Stopped: no final answer.", max_steps, calls, sources)
 

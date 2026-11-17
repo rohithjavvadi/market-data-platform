@@ -121,3 +121,26 @@ HARD_CASES = [
         "question": "Other Bets operating loss",
     },
 ]
+
+PRICE_CASES = [
+    {
+        "id": "p_amzn_1y",
+        "ticker": "AMZN",
+        "period": "1y",
+        "question": "How has Amazon stock performed over the past year?",
+    },
+    {"id": "p_nvda_ytd", "ticker": "NVDA", "period": "ytd", "question": "What is NVIDIA's year-to-date stock return?"},
+    {
+        "id": "p_msft_6m",
+        "ticker": "MSFT",
+        "period": "6m",
+        "question": "How volatile has Microsoft stock been over the last six months?",
+    },
+    {
+        "id": "p_googl_3y",
+        "ticker": "GOOGL",
+        "period": "3y",
+        "question": "What was Alphabet's maximum drawdown over the last three years?",
+    },
+    {"id": "p_aapl_1m", "ticker": "AAPL", "period": "1m", "question": "How did Apple shares do over the past month?"},
+]

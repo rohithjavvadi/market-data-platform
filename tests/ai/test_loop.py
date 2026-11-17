@@ -76,3 +76,17 @@ def test_price_tool_routing_and_tag():
 def test_price_error_has_no_source():
     text, srcs = format_prices({"ticker": "ZZZ", "error": "no price data"})
     assert srcs == [] and "no price data" in text
+
+
+def test_nudge_when_first_reply_skips_tools():
+    call = ToolCall("search_filings", {"query": "x"})
+    llm = FakeLLM([Reply("I think..."), Reply("", [call]), Reply("answer")])
+    r = run("q", llm, funcs={"search_filings": lambda **kw: []})
+    assert (r.answer, r.steps) == ("answer", 3)
+    assert llm.seen[1][0][-1]["content"].startswith("Call one of the tools")
+
+
+def test_nudge_only_once():
+    llm = FakeLLM([Reply("a"), Reply("b")])
+    r = run("q", llm, funcs={"search_filings": lambda **kw: []})
+    assert (r.answer, r.steps) == ("b", 2)
