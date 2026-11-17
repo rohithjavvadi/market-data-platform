@@ -1,5 +1,9 @@
-ruff==0.12.0
-sqlfluff==4.5.0
+beautifulsoup4==4.15.0
+duckdb==2.0.0
+numpy==2.5.4
+pyarrow==26.0.1
 pyspark==4.3.0
 pytest==8.4.2
-beautifulsoup4==4.15.0
+requests==2.34.2
+ruff==0.12.0
+sqlfluff==4.5.0
