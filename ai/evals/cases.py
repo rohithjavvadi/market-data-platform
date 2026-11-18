@@ -144,3 +144,64 @@ PRICE_CASES = [
     },
     {"id": "p_aapl_1m", "ticker": "AAPL", "period": "1m", "question": "How did Apple shares do over the past month?"},
 ]
+
+# Written by the user after tuning; run once. tools/tickers = all expected.
+ALL5 = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL"]
+HOLDOUT_CASES = [
+    {
+        "id": "ho1_aws_nvda_stock",
+        "tools": ["get_price_stats"],
+        "tickers": ["AMZN", "NVDA"],
+        "rubric": "Uses AMZN for AWS and says AWS is part of Amazon",
+        "question": "How fast are AWS and Nvidia growing in terms of stock?",
+    },
+    {
+        "id": "ho2_risk_nvda_aapl",
+        "tools": ["search_filings"],
+        "tickers": ["NVDA", "AAPL"],
+        "rubric": "Compares risk factors of both, cited",
+        "question": "What are the risks in Nvidia stocks compared to Apple?",
+    },
+    {
+        "id": "ho3_range_all",
+        "tools": ["get_price_stats"],
+        "tickers": ALL5,
+        "rubric": "Gets all five, names the widest high-low range",
+        "question": "Which company has the highest stock range?",
+    },
+    {
+        "id": "ho4_future_growth",
+        "tools": [],
+        "tickers": [],
+        "rubric": "Does not predict; uses filing outlook/risks or declines",
+        "question": "Which company has more growth in the future?",
+    },
+    {
+        "id": "ho5_aws_nvda_aapl",
+        "tools": ["get_price_stats"],
+        "tickers": ["AMZN", "NVDA", "AAPL"],
+        "rubric": "Three tickers, AWS mapped to AMZN",
+        "question": "How about the performances of AWS, Nvidia, and Apple?",
+    },
+    {
+        "id": "ho6_least_nvda_amzn",
+        "tools": ["get_price_stats"],
+        "tickers": ["NVDA", "AMZN"],
+        "rubric": "Compares returns and names the weaker one",
+        "question": "Which company has the least performances, Nvidia or Amazon?",
+    },
+    {
+        "id": "ho7_spacex",
+        "tools": ["get_price_stats"],
+        "tickers": ["AMZN"],
+        "rubric": "Says SpaceX is not covered; gives only Amazon",
+        "question": "How is SpaceX performing against Amazon?",
+    },
+    {
+        "id": "ho8_amzn_5m",
+        "tools": ["get_price_stats"],
+        "tickers": ["AMZN"],
+        "rubric": "Uses nearest period (6m or 3m) and says so",
+        "question": "what is the past 5 months expereince of Amazon?",
+    },
+]
