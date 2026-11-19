@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import websocket
 from confluent_kafka import Producer
 from dotenv import load_dotenv
+from liveness import is_stale
 
 load_dotenv()
 
@@ -45,6 +46,8 @@ def main():
     ap.add_argument("--symbols", default="AAPL,MSFT,NVDA,AMZN,GOOGL,BINANCE:BTCUSDT")
     ap.add_argument("--seconds", type=int, default=0, help="0 = run until Ctrl+C")
     ap.add_argument("--max-backoff", type=int, default=60)
+    ap.add_argument("--max-silence", type=int, default=120, help="seconds, market hours")
+    ap.add_argument("--max-silence-off", type=int, default=600, help="seconds, otherwise")
     args = ap.parse_args()
 
     api_key = os.environ["MARKET_API_KEY"]
@@ -59,9 +62,9 @@ def main():
             "compression.type": "lz4",
         }
     )
-    stats = {"recv": 0, "ok": 0, "err": 0, "dlq": 0, "reconnects": 0}
+    stats = {"recv": 0, "ok": 0, "err": 0, "dlq": 0, "reconnects": 0, "watchdog": 0}
     stop = threading.Event()
-    state = {"ws": None, "backoff": 1}
+    state = {"ws": None, "backoff": 1, "last": datetime.now(timezone.utc)}
 
     def on_delivery(err, msg):
         if err:
@@ -77,6 +80,7 @@ def main():
     def on_open(ws):
         for s in symbols:
             ws.send(json.dumps({"type": "subscribe", "symbol": s}))
+        state["last"] = datetime.now(timezone.utc)
         print(f"subscribed: {symbols}")
 
     def on_message(ws, raw):
@@ -88,6 +92,7 @@ def main():
         if msg.get("type") != "trade":
             return
         state["backoff"] = 1
+        state["last"] = datetime.now(timezone.utc)
         for t in msg.get("data", []):
             try:
                 trade = to_trade(t)
@@ -107,6 +112,18 @@ def main():
         stop.set()
         if state["ws"]:
             state["ws"].close()
+
+    def watchdog():
+        while not stop.wait(15):
+            now = datetime.now(timezone.utc)
+            if state["ws"] and is_stale(state["last"], now, args.max_silence, args.max_silence_off):
+                secs = int((now - state["last"]).total_seconds())
+                print(f"watchdog: no trades for {secs}s, reconnecting")
+                stats["watchdog"] += 1
+                state["last"] = now
+                state["ws"].close()
+
+    threading.Thread(target=watchdog, daemon=True).start()
 
     if args.seconds:
         threading.Timer(args.seconds, shutdown).start()
@@ -133,7 +150,7 @@ def main():
     finally:
         producer.flush(10)
         print(
-            f"done: recv={stats['recv']} ok={stats['ok']} err={stats['err']} dlq={stats['dlq']} reconnects={stats['reconnects']}"
+            f"done: recv={stats['recv']} ok={stats['ok']} err={stats['err']} dlq={stats['dlq']} reconnects={stats['reconnects']} watchdog={stats['watchdog']}"
         )
 
 
