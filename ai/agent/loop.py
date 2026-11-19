@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -130,12 +131,29 @@ def run_tool(call: ToolCall, funcs: dict) -> tuple[str, list[str]]:
     return fmt(out) if fmt else (json.dumps(out, default=str), [])
 
 
+CITE_RE = re.compile(r"\[(?:PRICES [A-Z]+ [\d-]+\.\.[\d-]+|[A-Z]+ 10-[KQ] [\w-]+ [\d-]+)\]")
+
+
+def enforce_citations(answer: str, sources: list[str]) -> tuple[str, list[str]]:
+    """Remove citation tags that were not retrieved this run; append a note."""
+    removed = sorted({t for t in CITE_RE.findall(answer) if t not in sources})
+    for t in removed:
+        answer = answer.replace(t, "")
+    answer = re.sub(r"[ \t]+([.,;:])", r"\1", answer)
+    answer = re.sub(r"[ \t]{2,}", " ", answer).strip()
+    if removed:
+        names = ", ".join(t.strip("[]") for t in removed)
+        answer += f"\n\n(Removed citation not found in retrieved sources: {names})"
+    return answer, removed
+
+
 @dataclass
 class Result:
     answer: str
     steps: int
     tool_calls: list[ToolCall]
     sources: list[str]
+    removed: list[str] = field(default_factory=list)
 
 
 NUDGE = "Call one of the tools before answering. Answer only from tool results."
@@ -159,7 +177,8 @@ def run(question: str, llm: LLM, funcs: dict | None = None, max_steps: int = 4) 
                 messages.append({"role": "assistant", "content": reply.content})
                 messages.append({"role": "user", "content": NUDGE})
                 continue
-            return Result(reply.content.strip(), step, calls, sources)
+            answer, removed = enforce_citations(reply.content.strip(), sources)
+            return Result(answer, step, calls, sources, removed)
         messages.append(
             {
                 "role": "assistant",
