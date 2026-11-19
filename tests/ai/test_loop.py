@@ -1,0 +1,92 @@
+from ai.agent.loop import Reply, ToolCall, format_prices, run
+
+HIT = {
+    "ticker": "NVDA",
+    "form": "10-K",
+    "item": "1A",
+    "filing_date": "2026-02-25",
+    "score": 0.8,
+    "text": "export controls hurt sales",
+}
+
+
+class FakeLLM:
+    def __init__(self, replies):
+        self.replies, self.seen = list(replies), []
+
+    def chat(self, messages, tools):
+        self.seen.append((list(messages), tools))
+        return self.replies.pop(0)
+
+
+def test_tool_then_answer():
+    calls = []
+
+    def fake_search(**kw):
+        calls.append(kw)
+        return [HIT, HIT]
+
+    args = {"query": "export controls", "ticker": "NVDA"}
+    llm = FakeLLM([Reply("", [ToolCall("search_filings", args)]), Reply("Answer [x].")])
+    r = run("q", llm, funcs={"search_filings": fake_search})
+    assert calls == [args]
+    assert (r.answer, r.steps) == ("Answer [x].", 2)
+    assert r.sources == ["[NVDA 10-K 1A 2026-02-25]"]
+    tool_msg = llm.seen[1][0][-1]
+    assert tool_msg["role"] == "tool"
+    assert "export controls hurt sales" in tool_msg["content"]
+
+
+def test_unknown_tool_and_bad_args_are_reported():
+    def fake_search(query):
+        return []
+
+    bad = [ToolCall("nope", {}), ToolCall("search_filings", {"bogus": 1})]
+    llm = FakeLLM([Reply("", bad), Reply("done")])
+    r = run("q", llm, funcs={"search_filings": fake_search})
+    msgs = llm.seen[1][0]
+    assert "unknown tool nope" in msgs[-2]["content"]
+    assert msgs[-1]["content"].startswith("Error:")
+    assert (r.answer, r.sources) == ("done", [])
+
+
+def test_last_step_has_no_tools():
+    looping = Reply("", [ToolCall("search_filings", {"query": "x"})])
+    llm = FakeLLM([looping, looping, Reply("final")])
+    r = run("q", llm, funcs={"search_filings": lambda **kw: []}, max_steps=3)
+    assert [len(t) for _, t in llm.seen] == [1, 1, 0]
+    assert (r.answer, r.steps) == ("final", 3)
+
+
+def test_price_tool_routing_and_tag():
+    stats = {
+        "ticker": "AMZN",
+        "start_date": "2025-11-06",
+        "end_date": "2026-11-06",
+        "total_return_pct": 6.69,
+    }
+    call = ToolCall("get_price_stats", {"ticker": "AMZN", "period": "1y"})
+    llm = FakeLLM([Reply("", [call]), Reply("ok")])
+    r = run("q", llm, funcs={"get_price_stats": lambda **kw: stats})
+    assert r.sources == ["[PRICES AMZN 2025-11-06..2026-11-06]"]
+    assert llm.seen[0][1][0]["function"]["name"] == "get_price_stats"
+    assert "6.69" in llm.seen[1][0][-1]["content"]
+
+
+def test_price_error_has_no_source():
+    text, srcs = format_prices({"ticker": "ZZZ", "error": "no price data"})
+    assert srcs == [] and "no price data" in text
+
+
+def test_nudge_when_first_reply_skips_tools():
+    call = ToolCall("search_filings", {"query": "x"})
+    llm = FakeLLM([Reply("I think..."), Reply("", [call]), Reply("answer")])
+    r = run("q", llm, funcs={"search_filings": lambda **kw: []})
+    assert (r.answer, r.steps) == ("answer", 3)
+    assert llm.seen[1][0][-1]["content"].startswith("Call one of the tools")
+
+
+def test_nudge_only_once():
+    llm = FakeLLM([Reply("a"), Reply("b")])
+    r = run("q", llm, funcs={"search_filings": lambda **kw: []})
+    assert (r.answer, r.steps) == ("b", 2)

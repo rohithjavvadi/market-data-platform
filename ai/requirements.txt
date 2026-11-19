@@ -1,0 +1,10 @@
+beautifulsoup4==4.15.0
+requests==2.34.2
+soupsieve==4.1
+pyarrow==26.0.1
+sentence-transformers==6.3.0
+torch==2.15.0
+transformers==5.22.2
+duckdb==2.0.0
+ollama==0.6.3
+ollama==0.6.3
